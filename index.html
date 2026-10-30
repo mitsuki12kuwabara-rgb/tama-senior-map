@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+<title>多摩市 高齢者施設マップ｜絵本活動 訪問・インタビュー相談先</title>
+<meta name="description" content="高齢者の人生を絵本にする活動のための、多摩市内の高齢者施設95件の地図。種別・エリアで絞り込み、インタビューの進捗を端末に記録できます。">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="">
+<style>
+  :root{
+    --brand:#1f8a4c; --brand-d:#156b3a;
+    --sumai:#e8622c; --tsusho:#2f74c0; --koryu:#2e9e5b; --madoguchi:#8457c4;
+    --st-none:#9aa3ab; --st-contact:#e0a500; --st-arrange:#e8731c; --st-done:#1f8a4c; --st-skip:#b0b6bc;
+    --bg:#f5f6f4; --panel:#ffffff; --ink:#20262b; --sub:#5c666e; --line:#e3e6e4;
+    --shadow:0 6px 24px rgba(0,0,0,.14);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+  /* ---- header ---- */
+  header{background:linear-gradient(180deg,var(--brand),var(--brand-d));color:#fff;padding:8px 12px calc(8px);box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:600}
+  .hrow{display:flex;align-items:center;gap:8px}
+  .htitle{font-size:16px;font-weight:700;line-height:1.2;flex:1;min-width:0}
+  .htitle small{display:block;font-size:10.5px;font-weight:400;opacity:.9;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbtn{flex:none;width:40px;height:40px;border:none;border-radius:10px;background:rgba(255,255,255,.16);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .hbtn:active{background:rgba(255,255,255,.3)}
+  .progress{margin-top:7px;display:flex;align-items:center;gap:8px;font-size:11.5px}
+  .pbar{flex:1;height:7px;border-radius:5px;background:rgba(255,255,255,.28);overflow:hidden}
+  .pbar>i{display:block;height:100%;width:0;background:#ffe08a;transition:width .4s}
+  .pcount{font-weight:700;white-space:nowrap}
+
+  /* ---- search ---- */
+  .searchwrap{position:relative;margin-top:7px;display:none}
+  .searchwrap.on{display:block}
+  #search{width:100%;height:40px;border:none;border-radius:10px;padding:0 36px 0 12px;font-size:15px;color:var(--ink)}
+  .clearS{position:absolute;right:6px;top:6px;width:28px;height:28px;border:none;background:#eceeec;border-radius:7px;font-size:14px;color:var(--sub);cursor:pointer}
+
+  /* ---- filter panel (collapsible) ---- */
+  #panel{position:absolute;left:0;right:0;top:100%;background:var(--panel);box-shadow:var(--shadow);border-radius:0 0 14px 14px;padding:12px 12px 14px;z-index:590;transform:translateY(-8px);opacity:0;pointer-events:none;transition:.22s;max-height:70vh;overflow:auto}
+  #panel.on{transform:none;opacity:1;pointer-events:auto}
+  .psec{margin-bottom:12px}
+  .psec h4{margin:0 0 7px;font-size:12px;color:var(--sub);font-weight:700;letter-spacing:.02em}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:5px 11px;border-radius:20px;border:1.5px solid var(--line);background:#fff;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .chip .dot{width:11px;height:11px;border-radius:50%}
+  .chip.off{opacity:.38}
+  .chip.sel{border-color:var(--brand);background:#eaf6ee;color:var(--brand-d);font-weight:700}
+  .seg{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{flex:1;min-height:38px;border:none;background:#fff;font-size:13px;color:var(--sub);cursor:pointer}
+  .seg button.on{background:var(--brand);color:#fff;font-weight:700}
+  .prow{display:flex;gap:8px;flex-wrap:wrap}
+  .ptext{font-size:11px;color:var(--sub);line-height:1.5;margin-top:4px}
+  .linklike{color:var(--brand-d);text-decoration:underline;cursor:pointer;background:none;border:none;font-size:12px;padding:4px 0}
+
+  /* ---- map ---- */
+  #map{flex:1;position:relative;z-index:1}
+  .leaflet-container{background:#e9ece9;font:inherit}
+
+  /* marker */
+  .mk{position:relative;width:26px;height:26px}
+  .mk .pin{position:absolute;inset:0;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.35)}
+  .mk .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff}
+  .mk.done .pin::after{content:"";position:absolute;right:-7px;top:-7px;width:13px;height:13px;border-radius:50%;background:var(--st-done);border:2px solid #fff;transform:rotate(45deg)}
+  .mk.contact .pin::after,.mk.arrange .pin::after{content:"";position:absolute;right:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--st-contact);border:2px solid #fff;transform:rotate(45deg)}
+  .mk.skip{opacity:.5}
+  .mk.big{width:30px;height:30px;z-index:1000}
+
+  /* ---- detail sheet ---- */
+  #sheet{position:absolute;left:0;right:0;bottom:0;background:var(--panel);z-index:700;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.2);transform:translateY(110%);transition:transform .28s cubic-bezier(.3,.8,.3,1);max-height:88%;display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
+  #sheet.on{transform:none}
+  .grab{height:4px;width:40px;border-radius:3px;background:#d4d8d4;margin:8px auto 2px}
+  .shead{padding:4px 16px 10px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+  .shead .g{flex:none;width:8px;align-self:stretch;border-radius:4px;margin-top:2px}
+  .shead .t{flex:1;min-width:0}
+  .shead .cat{font-size:11.5px;color:var(--sub)}
+  .shead .nm{font-size:18px;font-weight:700;line-height:1.25;margin:1px 0 3px}
+  .sbadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .badge{font-size:11px;padding:2px 8px;border-radius:12px;background:#eef1ee;color:var(--sub)}
+  .badge.stt{color:#fff;font-weight:700}
+  .closeS{flex:none;width:34px;height:34px;border:none;background:#eceeec;border-radius:9px;font-size:17px;color:var(--sub);cursor:pointer}
+  .sbody{overflow:auto;padding:12px 16px 20px}
+  .actbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .abtn{flex:1;min-width:120px;min-height:46px;border-radius:11px;border:1.5px solid var(--line);background:#fff;font-size:14px;font-weight:700;color:var(--brand-d);display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;cursor:pointer}
+  .abtn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .abtn:active{filter:brightness(.95)}
+  .kv{margin:0 0 10px}
+  .kv dt{font-size:11.5px;color:var(--sub);margin-bottom:1px}
+  .kv dd{margin:0 0 8px;font-size:14px;line-height:1.5;word-break:break-word}
+  .kv dd.warn{background:#fff7ed;border-left:3px solid var(--st-arrange);padding:7px 9px;border-radius:0 6px 6px 0}
+  .srclinks a{display:inline-block;font-size:12px;color:var(--brand-d);margin-right:12px;word-break:break-all}
+
+  /* record form */
+  .rec{background:#f3f7f3;border:1px solid #dde7de;border-radius:12px;padding:12px;margin-top:4px}
+  .rec h3{margin:0 0 10px;font-size:14px;color:var(--brand-d);display:flex;align-items:center;gap:6px}
+  .statusseg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
+  .statusseg button{min-height:40px;padding:0 12px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .statusseg button .dot{width:10px;height:10px;border-radius:50%}
+  .statusseg button.on{border-color:transparent;color:#fff;font-weight:700}
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:3px;font-weight:700}
+  .field input,.field textarea,.field select{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:9px 10px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
+  .field textarea{min-height:68px;resize:vertical}
+  .f2{display:flex;gap:8px}.f2>div{flex:1}
+  .savednote{font-size:11.5px;color:var(--brand-d);margin-top:2px;min-height:15px}
+
+  /* list view */
+  #listview{position:absolute;inset:0;background:var(--bg);z-index:650;transform:translateY(100%);transition:transform .25s;display:flex;flex-direction:column}
+  #listview.on{transform:none}
+  .lhead{padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;font-weight:700}
+  .lbody{flex:1;overflow:auto;padding:8px 10px calc(14px + var(--safe-b))}
+  .lcard{background:#fff;border:1px solid var(--line);border-left-width:5px;border-radius:11px;padding:11px 12px;margin-bottom:8px;cursor:pointer;display:flex;gap:10px;align-items:center}
+  .lcard .ln{flex:1;min-width:0}
+  .lcard .lnm{font-size:14.5px;font-weight:700;line-height:1.3}
+  .lcard .lsub{font-size:11.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lcard .lst{flex:none;font-size:10.5px;font-weight:700;color:#fff;padding:3px 8px;border-radius:11px}
+
+  /* fab */
+  .fab{position:absolute;right:12px;z-index:620;width:52px;height:52px;border-radius:16px;border:none;background:#fff;box-shadow:var(--shadow);font-size:13px;font-weight:700;color:var(--brand-d);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+  .fab .ic{font-size:20px}
+  #fabList{bottom:calc(20px + var(--safe-b))}
+
+  /* toast */
+  #toast{position:absolute;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);background:#20262b;color:#fff;padding:9px 16px;border-radius:22px;font-size:13px;z-index:900;opacity:0;transition:.25s;pointer-events:none;max-width:90%}
+  #toast.on{opacity:1;transform:translateX(-50%)}
+
+  /* modal (info / export) */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:flex-end;justify-content:center}
+  .modal.on{display:flex}
+  .mcard{background:#fff;width:100%;max-width:560px;max-height:86%;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(20px + var(--safe-b))}
+  .mcard h2{margin:0 0 4px;font-size:17px}
+  .mcard h3{font-size:13px;color:var(--brand-d);margin:16px 0 6px}
+  .mcard p,.mcard li{font-size:13px;line-height:1.65;color:var(--ink)}
+  .mcard .sub{color:var(--sub)}
+  .mclose{float:right;width:34px;height:34px;border:none;background:#eceeec;border-radius:9px;font-size:17px;cursor:pointer;color:var(--sub)}
+  .bigbtn{display:block;width:100%;min-height:48px;border-radius:12px;border:1.5px solid var(--brand);background:var(--brand);color:#fff;font-size:15px;font-weight:700;margin-top:8px;cursor:pointer}
+  .bigbtn.sec{background:#fff;color:var(--brand-d)}
+  .cautions details{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:6px}
+  .cautions summary{font-size:13px;font-weight:700;cursor:pointer}
+  .cautions .ct{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6}
+
+  /* desktop: sheet as right sidebar */
+  @media(min-width:860px){
+    .htitle{font-size:19px}.htitle small{font-size:12px}
+    #sheet{left:auto;right:0;top:0;bottom:0;width:430px;max-height:none;border-radius:0;transform:translateX(110%);box-shadow:-6px 0 24px rgba(0,0,0,.14)}
+    #sheet.on{transform:none}
+    .grab{display:none}
+    #panel{left:12px;right:auto;width:340px;border-radius:14px;top:calc(100% + 6px)}
+    #fabList{bottom:24px;right:24px}
+    #listview{right:auto;width:400px;box-shadow:var(--shadow)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="hrow">
+      <div class="htitle">多摩市 高齢者施設マップ<small id="hsub">絵本活動の訪問・インタビュー相談先（95件）</small></div>
+      <button class="hbtn" id="btnSearch" aria-label="検索">🔍</button>
+      <button class="hbtn" id="btnPanel" aria-label="絞り込み">⚙</button>
+      <button class="hbtn" id="btnInfo" aria-label="このマップについて">ⓘ</button>
+    </div>
+    <div class="progress">
+      <span>インタビュー進捗</span>
+      <div class="pbar"><i id="pbarI"></i></div>
+      <span class="pcount"><b id="pDone">0</b>/95 済</span>
+    </div>
+    <div class="searchwrap" id="searchwrap">
+      <input id="search" type="search" placeholder="施設名・住所で検索" autocomplete="off">
+      <button class="clearS" id="clearS">✕</button>
+    </div>
+    <div id="panel">
+      <div class="psec">
+        <h4>種別（タップで表示切替）</h4>
+        <div class="chips" id="groupChips"></div>
+      </div>
+      <div class="psec">
+        <h4>エリア（住所目安）</h4>
+        <div class="chips" id="areaChips"></div>
+      </div>
+      <div class="psec">
+        <h4>インタビュー状況</h4>
+        <div class="chips" id="statusChips"></div>
+      </div>
+      <div class="psec">
+        <h4>ピンの色分け</h4>
+        <div class="seg" id="colorSeg">
+          <button data-c="group" class="on">施設の種別</button>
+          <button data-c="status">インタビュー進捗</button>
+        </div>
+        <div class="ptext" id="colorHint"></div>
+      </div>
+      <div class="prow">
+        <button class="linklike" id="resetFilters">絞り込みをリセット</button>
+        <button class="linklike" id="openConsult">相談窓口を表示 ▶</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="map"></div>
+  <button class="fab" id="fabList"><span class="ic">☰</span>一覧</button>
+  <div id="toast"></div>
+
+  <!-- detail sheet -->
+  <div id="sheet">
+    <div class="grab"></div>
+    <div class="shead">
+      <div class="g" id="shG"></div>
+      <div class="t">
+        <div class="cat" id="shCat"></div>
+        <div class="nm" id="shNm"></div>
+        <div class="sbadges" id="shBadges"></div>
+      </div>
+      <button class="closeS" id="closeSheet">✕</button>
+    </div>
+    <div class="sbody" id="shBody"></div>
+  </div>
+
+  <!-- list view -->
+  <div id="listview">
+    <div class="lhead"><button class="closeS" id="closeList">✕</button><span>施設一覧（<span id="listCount">0</span>件）</span></div>
+    <div class="lbody" id="listBody"></div>
+  </div>
+</div>
+
+<!-- info modal -->
+<div class="modal" id="infoModal">
+  <div class="mcard">
+    <button class="mclose" id="closeInfo">✕</button>
+    <h2>このマップについて</h2>
+    <p class="sub" id="infoLead"></p>
+    <h3>目的・対象</h3>
+    <p id="infoPurpose"></p>
+    <h3>件数の内訳</h3>
+    <p id="infoCounts"></p>
+    <h3>駅近で検討する候補</h3>
+    <div id="infoStations"></div>
+    <h3>読み方・注意事項</h3>
+    <div class="cautions" id="infoCautions"></div>
+    <h3>記録の保存とバックアップ</h3>
+    <p class="sub">インタビュー状況・メモは<b>この端末のブラウザ内だけ</b>に保存されます（サーバーには送信しません）。機種変更・共有時は下のエクスポートで控えを取り、元のExcelへ転記してください。</p>
+    <button class="bigbtn sec" id="openExport">記録のエクスポート / バックアップ</button>
+  </div>
+</div>
+
+<!-- export modal -->
+<div class="modal" id="exportModal">
+  <div class="mcard">
+    <button class="mclose" id="closeExport">✕</button>
+    <h2>記録のエクスポート・取り込み</h2>
+    <p class="sub">元のExcel「tama_senior_facilities」へ書き戻す控えを出力します。</p>
+    <h3>① Excelへ貼り付け（CSV）</h3>
+    <p class="sub">記録のある施設だけをCSVで保存。Excelで開き、No.を目印に転記できます。</p>
+    <button class="bigbtn" id="btnCsv">CSVをダウンロード</button>
+    <h3>② バックアップ（JSON）</h3>
+    <p class="sub">全記録を丸ごと保存／別端末で復元できます。</p>
+    <button class="bigbtn sec" id="btnJson">JSONをダウンロード</button>
+    <button class="bigbtn sec" id="btnImport">JSONを取り込み（復元）</button>
+    <input type="file" id="fileImport" accept=".json,application/json" style="display:none">
+    <h3>記録をすべて消去</h3>
+    <button class="bigbtn sec" id="btnWipe" style="border-color:#c0392b;color:#c0392b">この端末の記録を全消去</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin=""></script>
+<script src="data.js"></script>
+<script>
+(function(){
+"use strict";
+var D = window.TAMA_DATA, F = D.facilities, C = D.consult, META = D.meta;
+var GROUPS = D.groups;
+var GMAP = {}; GROUPS.forEach(function(g){GMAP[g.id]=g;});
+
+// status defs
+var STATUS = [
+  {id:"none",    label:"未着手",     color:"#9aa3ab"},
+  {id:"contact", label:"連絡済",     color:"#e0a500"},
+  {id:"arrange", label:"日程調整中", color:"#e8731c"},
+  {id:"done",    label:"実施済",     color:"#1f8a4c"},
+  {id:"skip",    label:"見送り",     color:"#b0b6bc"}
+];
+var SMAP={}; STATUS.forEach(function(s){SMAP[s.id]=s;});
+
+var YOMI=["未確認","可","不可","検討中"];
+
+// ---------- storage ----------
+var LSKEY="tama_senior_records_v1";
+var REC={};
+try{ REC = JSON.parse(localStorage.getItem(LSKEY)||"{}")||{}; }catch(e){ REC={}; }
+function saveREC(){ try{ localStorage.setItem(LSKEY, JSON.stringify(REC)); }catch(e){ toast("保存できません（ブラウザ設定をご確認ください）"); } }
+function recOf(no){ return REC[no] || {status:"none"}; }
+
+// ---------- state ----------
+var state = {
+  groups: {}, area:"all", status:"all", q:"", colorBy:"group", showConsult:false
+};
+GROUPS.forEach(function(g){ state.groups[g.id]=true; });
+
+// ---------- map ----------
+var map = L.map('map',{zoomControl:true,attributionControl:true}).setView([35.634,139.438],13);
+map.zoomControl.setPosition('bottomright');
+L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{
+  maxZoom:18, attribution:"地理院タイル（淡色地図）"
+}).addTo(map);
+
+var markers=[]; // {no,marker,rec}
+var consultMarkers=[];
+var activeNo=null;
+
+function markerHtml(f, rec, colorBy){
+  var col = colorBy==="status" ? SMAP[rec.status].color : GMAP[f.group].color;
+  var cls="mk "+(rec.status||"none");
+  var inner='<div class="pin" style="background:'+col+'"></div><div class="num">'+f.no+'</div>';
+  return {cls:cls, html:inner};
+}
+function iconFor(f, rec){
+  var m=markerHtml(f,rec,state.colorBy);
+  return L.divIcon({className:"", html:'<div class="'+m.cls+'">'+m.html+'</div>', iconSize:[26,26], iconAnchor:[13,24], popupAnchor:[0,-22]});
+}
+
+F.forEach(function(f){
+  var mk=L.marker([f.dlat,f.dlng],{icon:iconFor(f,recOf(f.no)),keyboard:false});
+  mk.on('click',function(){ openSheet(f.no); });
+  markers.push({no:f.no, f:f, marker:mk});
+});
+
+// consult markers (toggle)
+C.forEach(function(c,i){
+  if(c.lat==null) return;
+  var ic=L.divIcon({className:"",html:'<div class="mk madoguchi"><div class="pin" style="background:'+GMAP.madoguchi.color+'"></div><div class="num">相</div></div>',iconSize:[26,26],iconAnchor:[13,24]});
+  var mk=L.marker([c.lat+(i%2?0.0004:-0.0004),c.lng],{icon:ic});
+  mk.on('click',function(){ openConsultSheet(c); });
+  consultMarkers.push(mk);
+});
+
+// ---------- filtering ----------
+function matches(f){
+  if(!state.groups[f.group]) return false;
+  if(state.area!=="all" && f.area!==state.area) return false;
+  if(state.status!=="all"){
+    var st=recOf(f.no).status||"none";
+    if(state.status==="todo"){ if(st==="done"||st==="skip") return false; }
+    else if(st!==state.status) return false;
+  }
+  if(state.q){
+    var q=state.q.toLowerCase();
+    var hay=(f.name+" "+f.address+" "+f.category+" "+(f.area||"")).toLowerCase();
+    if(hay.indexOf(q)<0) return false;
+  }
+  return true;
+}
+
+function render(){
+  var n=0;
+  markers.forEach(function(m){
+    if(matches(m.f)){
+      m.marker.setIcon(iconFor(m.f, recOf(m.no)));
+      if(!map.hasLayer(m.marker)) m.marker.addTo(map);
+      n++;
+    }else{
+      if(map.hasLayer(m.marker)) map.removeLayer(m.marker);
+    }
+  });
+  // consult
+  consultMarkers.forEach(function(mk){
+    if(state.showConsult){ if(!map.hasLayer(mk)) mk.addTo(map); }
+    else if(map.hasLayer(mk)) map.removeLayer(mk);
+  });
+  updateProgress();
+  if(document.getElementById('listview').classList.contains('on')) renderList();
+  return n;
+}
+
+function updateProgress(){
+  var done=0; F.forEach(function(f){ if((recOf(f.no).status)==="done") done++; });
+  document.getElementById('pDone').textContent=done;
+  document.getElementById('pbarI').style.width=(done/F.length*100)+"%";
+}
+
+// ---------- detail sheet ----------
+var sheet=document.getElementById('sheet');
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function telLink(t){ if(!t) return ""; var d=String(t).replace(/[^0-9]/g,""); return '<a class="abtn" href="tel:'+d+'">📞 電話をかける</a>'; }
+
+function openSheet(no){
+  var f=F.filter(function(x){return x.no===no;})[0]; if(!f) return;
+  activeNo=no;
+  var g=GMAP[f.group], rec=recOf(no);
+  document.getElementById('shG').style.background=g.color;
+  document.getElementById('shCat').textContent=f.category+"　/　"+(f.area||"");
+  document.getElementById('shNm').textContent=f.name;
+  var st=SMAP[rec.status||"none"];
+  document.getElementById('shBadges').innerHTML=
+    '<span class="badge stt" style="background:'+st.color+'">'+st.label+'</span>'+
+    '<span class="badge" style="background:'+g.color+'22;color:'+g.color+'">'+g.label+'</span>';
+
+  var mapsUrl="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(f.address);
+  var body='';
+  body+='<div class="actbar">'+telLink(f.tel)+
+        '<a class="abtn" target="_blank" rel="noopener" href="'+mapsUrl+'">🗺 地図アプリで開く</a></div>';
+
+  // key values
+  body+='<dl class="kv">';
+  body+=row("住所", esc(f.address));
+  if(f.tel) body+=row("電話番号", esc(f.tel));
+  body+=row("実人数", numCell(f.actual, f.actualType, f.actualAsof));
+  body+=row("定員・戸数", capCell(f));
+  if(f.access && f.access!=="公開資料で未確認") body+=row("交通案内", esc(f.access).replace(/\n/g,"<br>"));
+  if(f.notes) body+='<dt>注意・確認事項</dt><dd class="warn">'+esc(f.notes).replace(/\n/g,"<br>")+'</dd>';
+  body+='</dl>';
+
+  // record form
+  body+=recordForm(no, rec);
+
+  // sources
+  body+='<dl class="kv"><dt>出典</dt><dd class="srclinks">';
+  if(f.srcName) body+='<a target="_blank" rel="noopener" href="'+esc(f.srcName)+'">名称・住所・電話の出典 ↗</a>';
+  if(f.srcNum && f.srcNum!==f.srcName) body+='<a target="_blank" rel="noopener" href="'+esc(f.srcNum)+'">人数・定員の出典 ↗</a>';
+  body+='</dd>';
+  if(f.careproUpdate) body+=row("資料更新日", esc(f.careproUpdate));
+  body+=row("調査日", esc(f.surveyDate));
+  body+='</dl>';
+
+  document.getElementById('shBody').innerHTML=body;
+  bindRecord(no);
+  sheet.classList.add('on');
+  // highlight marker
+  markers.forEach(function(m){
+    var el=m.marker._icon; if(!el)return; var d=el.querySelector('.mk');
+    if(d) d.classList.toggle('big', m.no===no);
+  });
+  var mm=markers.filter(function(m){return m.no===no;})[0];
+  if(mm) map.panTo([f.dlat,f.dlng],{animate:true});
+}
+function row(k,v){ return '<dt>'+k+'</dt><dd>'+v+'</dd>'; }
+function numCell(a,t,asof){
+  if(a==null||a==="未確認") return '<span style="color:var(--sub)">未確認</span><br><span style="font-size:11.5px;color:var(--sub)">'+esc(t||"")+'</span>';
+  return '<b>'+esc(a)+' 人</b>　<span style="font-size:11.5px;color:var(--sub)">'+esc(t||"")+(asof&&asof!=="未確認"?"（"+esc(asof)+"）":"")+'</span>';
+}
+function capCell(f){
+  if(f.capacity==null||f.capacity==="未確認") return '<span style="color:var(--sub)">未確認</span>';
+  return '<b>'+esc(f.capacity)+' '+esc(f.unit||"")+'</b>　<span style="font-size:11.5px;color:var(--sub)">'+esc(f.capacityType||"")+'</span>';
+}
+
+function recordForm(no, rec){
+  var h='<div class="rec"><h3>📝 インタビュー記録（この端末に保存）</h3>';
+  h+='<div class="statusseg" id="stseg">';
+  STATUS.forEach(function(s){
+    var on=(rec.status||"none")===s.id;
+    h+='<button data-s="'+s.id+'" class="'+(on?'on':'')+'" style="'+(on?'background:'+s.color:'')+'"><span class="dot" style="background:'+s.color+'"></span>'+s.label+'</button>';
+  });
+  h+='</div>';
+  h+='<div class="f2"><div class="field"><label>連絡した日</label><input type="date" id="r_contact" value="'+esc(rec.contactDate||"")+'"></div>'+
+     '<div class="field"><label>実施・訪問日</label><input type="date" id="r_visit" value="'+esc(rec.visitDate||"")+'"></div></div>';
+  h+='<div class="f2"><div class="field"><label>先方の担当・窓口</label><input type="text" id="r_staff" placeholder="例）相談員 ○○様" value="'+esc(rec.staff||"")+'"></div>'+
+     '<div class="field"><label>読み合わせ会</label><select id="r_yomi">'+YOMI.map(function(y){return '<option '+((rec.yomiawase||"未確認")===y?'selected':'')+'>'+y+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field"><label>メモ（会話可能な希望者数・1日の人数・面談可否など）</label><textarea id="r_memo" placeholder="連絡時の確認：通常1日の人数／会話・聞き取り可能な希望者／読み合わせ会の可否／担当者／面談可否">'+esc(rec.memo||"")+'</textarea></div>';
+  h+='<div class="savednote" id="savedNote">'+(rec.updatedAt?'最終更新 '+esc(rec.updatedAt):'')+'</div>';
+  h+='</div>';
+  return h;
+}
+
+function bindRecord(no){
+  var seg=document.getElementById('stseg');
+  function commit(){
+    var r=REC[no]||{};
+    r.status=seg.querySelector('button.on').getAttribute('data-s');
+    r.contactDate=document.getElementById('r_contact').value;
+    r.visitDate=document.getElementById('r_visit').value;
+    r.staff=document.getElementById('r_staff').value.trim();
+    r.yomiawase=document.getElementById('r_yomi').value;
+    r.memo=document.getElementById('r_memo').value.trim();
+    // prune empty
+    if(r.status==="none" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && (r.yomiawase==="未確認"||!r.yomiawase)){
+      delete REC[no];
+    }else{
+      var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+      REC[no]=r;
+      document.getElementById('savedNote').textContent="最終更新 "+r.updatedAt;
+    }
+    saveREC();
+    // refresh badge + marker
+    var st=SMAP[(REC[no]&&REC[no].status)||"none"];
+    var f=F.filter(function(x){return x.no===no;})[0];
+    var g=GMAP[f.group];
+    document.getElementById('shBadges').innerHTML='<span class="badge stt" style="background:'+st.color+'">'+st.label+'</span><span class="badge" style="background:'+g.color+'22;color:'+g.color+'">'+g.label+'</span>';
+    var mm=markers.filter(function(m){return m.no===no;})[0];
+    if(mm){ mm.marker.setIcon(iconFor(f, recOf(no))); var d2=mm.marker._icon&&mm.marker._icon.querySelector('.mk'); if(d2)d2.classList.add('big'); }
+    updateProgress();
+  }
+  seg.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click',function(){
+      seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');x.style.background='';});
+      b.classList.add('on'); b.style.background=SMAP[b.getAttribute('data-s')].color;
+      commit();
+    });
+  });
+  ['r_contact','r_visit','r_staff','r_yomi','r_memo'].forEach(function(id){
+    var el=document.getElementById(id);
+    el.addEventListener('change',commit); el.addEventListener('blur',commit);
+  });
+}
+
+function closeSheet(){
+  sheet.classList.remove('on'); activeNo=null;
+  markers.forEach(function(m){ var el=m.marker._icon; if(el){var d=el.querySelector('.mk'); if(d)d.classList.remove('big');} });
+}
+document.getElementById('closeSheet').addEventListener('click',closeSheet);
+
+function openConsultSheet(c){
+  activeNo=null;
+  document.getElementById('shG').style.background=GMAP.madoguchi.color;
+  document.getElementById('shCat').textContent="相談・連携の窓口";
+  document.getElementById('shNm').textContent=c.name;
+  document.getElementById('shBadges').innerHTML='<span class="badge" style="background:'+GMAP.madoguchi.color+'22;color:'+GMAP.madoguchi.color+'">地域包括支援センター等</span>';
+  var mapsUrl="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(c.address);
+  var body='<div class="actbar">'+telLink(c.tel)+'<a class="abtn" target="_blank" rel="noopener" href="'+mapsUrl+'">🗺 地図アプリで開く</a></div>';
+  body+='<dl class="kv">'+row("住所",esc(c.address))+(c.tel?row("電話番号",esc(c.tel)):"")+
+        row("位置づけ",esc(c.note))+'<dt>出典</dt><dd class="srclinks"><a target="_blank" rel="noopener" href="'+esc(c.src)+'">福祉のしおり ↗</a></dd></dl>';
+  body+='<p style="font-size:12.5px;color:var(--sub);line-height:1.6">相談窓口は利用者のいる施設ではありません。絵本活動の最初の入口として、受け入れ可能な施設の紹介・連携を相談できます。</p>';
+  document.getElementById('shBody').innerHTML=body;
+  sheet.classList.add('on');
+}
+
+// ---------- list view ----------
+function renderList(){
+  var lb=document.getElementById('listBody'); var arr=F.filter(matches);
+  document.getElementById('listCount').textContent=arr.length;
+  // sort: status progress then no
+  var ord={done:0,arrange:1,contact:2,none:3,skip:4};
+  arr.sort(function(a,b){ var sa=ord[recOf(a.no).status||"none"], sb=ord[recOf(b.no).status||"none"]; return sa-sb || a.no-b.no; });
+  lb.innerHTML=arr.map(function(f){
+    var g=GMAP[f.group], st=SMAP[recOf(f.no).status||"none"];
+    return '<div class="lcard" data-no="'+f.no+'" style="border-left-color:'+g.color+'">'+
+      '<div class="ln"><div class="lnm">'+esc(f.name)+'</div>'+
+      '<div class="lsub">'+esc(f.category)+'・'+esc(f.area||"")+'</div></div>'+
+      '<span class="lst" style="background:'+st.color+'">'+st.label+'</span></div>';
+  }).join('') || '<p style="text-align:center;color:var(--sub);padding:30px 0">該当する施設がありません</p>';
+  lb.querySelectorAll('.lcard').forEach(function(card){
+    card.addEventListener('click',function(){
+      var no=+card.getAttribute('data-no');
+      document.getElementById('listview').classList.remove('on');
+      var f=F.filter(function(x){return x.no===no;})[0];
+      map.setView([f.dlat,f.dlng],16,{animate:true});
+      setTimeout(function(){openSheet(no);},180);
+    });
+  });
+}
+
+// ---------- UI wiring ----------
+function toast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2200); }
+
+// group chips
+var gc=document.getElementById('groupChips');
+GROUPS.filter(function(g){return g.id!=="madoguchi";}).forEach(function(g){
+  var cnt=F.filter(function(f){return f.group===g.id;}).length;
+  var el=document.createElement('button'); el.className='chip sel'; el.setAttribute('data-g',g.id);
+  el.innerHTML='<span class="dot" style="background:'+g.color+'"></span>'+g.label+' '+cnt;
+  el.addEventListener('click',function(){
+    state.groups[g.id]=!state.groups[g.id];
+    el.classList.toggle('off',!state.groups[g.id]);
+    el.classList.toggle('sel',state.groups[g.id]);
+    render();
+  });
+  gc.appendChild(el);
+});
+// area chips
+var areas=[]; F.forEach(function(f){ if(areas.indexOf(f.area)<0 && f.area) areas.push(f.area); });
+var ac=document.getElementById('areaChips');
+function mkAreaChip(label,val){
+  var el=document.createElement('button'); el.className='chip'+(state.area===val?' sel':'');
+  el.textContent=label; el.addEventListener('click',function(){
+    state.area=val; ac.querySelectorAll('.chip').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); render();
+  }); ac.appendChild(el);
+}
+mkAreaChip("すべて","all"); areas.forEach(function(a){ mkAreaChip(a.replace("方面","").replace("（住所目安）",""),a); });
+// status chips
+var sc=document.getElementById('statusChips');
+function mkStatusChip(label,val,color){
+  var el=document.createElement('button'); el.className='chip'+(state.status===val?' sel':'');
+  el.innerHTML=(color?'<span class="dot" style="background:'+color+'"></span>':'')+label;
+  el.addEventListener('click',function(){ state.status=val; sc.querySelectorAll('.chip').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); render(); });
+  sc.appendChild(el);
+}
+mkStatusChip("すべて","all");
+mkStatusChip("未訪問のみ","todo","#9aa3ab");
+STATUS.forEach(function(s){ mkStatusChip(s.label,s.id,s.color); });
+
+// color seg
+document.getElementById('colorSeg').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b)return;
+  this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+  state.colorBy=b.getAttribute('data-c'); updateColorHint(); render();
+});
+function updateColorHint(){
+  document.getElementById('colorHint').innerHTML = state.colorBy==="group"
+    ? "住まい=橙 / 通所・多機能=青 / 交流・介護予防=緑"
+    : "未着手=灰 / 連絡済=黄 / 調整中=橙 / 実施済=緑 / 見送り=薄灰";
+}
+updateColorHint();
+
+// header buttons
+var panel=document.getElementById('panel');
+document.getElementById('btnPanel').addEventListener('click',function(){ panel.classList.toggle('on'); document.getElementById('searchwrap').classList.remove('on'); });
+document.getElementById('btnSearch').addEventListener('click',function(){
+  var sw=document.getElementById('searchwrap'); sw.classList.toggle('on'); panel.classList.remove('on');
+  if(sw.classList.contains('on')) document.getElementById('search').focus();
+});
+document.getElementById('search').addEventListener('input',function(){ state.q=this.value.trim(); render(); });
+document.getElementById('clearS').addEventListener('click',function(){ document.getElementById('search').value=""; state.q=""; render(); });
+document.getElementById('resetFilters').addEventListener('click',function(){
+  GROUPS.forEach(function(g){state.groups[g.id]=true;}); state.area="all"; state.status="all"; state.q="";
+  document.getElementById('search').value="";
+  gc.querySelectorAll('.chip').forEach(function(x){x.classList.add('sel');x.classList.remove('off');});
+  ac.querySelectorAll('.chip').forEach(function(x,i){x.classList.toggle('sel',i===0);});
+  sc.querySelectorAll('.chip').forEach(function(x,i){x.classList.toggle('sel',i===0);});
+  render(); toast("絞り込みをリセットしました");
+});
+document.getElementById('openConsult').addEventListener('click',function(){
+  state.showConsult=!state.showConsult; this.textContent=state.showConsult?"相談窓口を隠す ▼":"相談窓口を表示 ▶"; render();
+  toast(state.showConsult?"相談窓口7件を表示":"相談窓口を非表示");
+});
+
+// fab list
+document.getElementById('fabList').addEventListener('click',function(){ document.getElementById('listview').classList.add('on'); renderList(); });
+document.getElementById('closeList').addEventListener('click',function(){ document.getElementById('listview').classList.remove('on'); });
+
+// info modal
+function fillInfo(){
+  document.getElementById('hsub').textContent="絵本活動の訪問・インタビュー相談先（"+META.counts.total+"件）";
+  document.getElementById('infoLead').textContent="調査日 "+META.surveyDate+"　｜　データ出典：多摩市けあプロ・navi、東京都有料老人ホーム一覧、サ高住登録、多摩市公式ほか";
+  document.getElementById('infoPurpose').innerHTML="<b>目的</b>："+esc(META.purpose)+"<br><b>対象</b>："+esc(META.target);
+  var c=META.counts;
+  document.getElementById('infoCounts').innerHTML="全"+c.total+"件（施設・サービス単位）<br>住まい（入居系）"+c.sumai+"　/　通所・多機能"+c.tsusho+"　/　交流・介護予防"+c.koryu+"　/　相談窓口"+c.madoguchi+"<br>うち実人数を掲載できた行 "+c.withActual+"件。同一建物・同一利用者の重複を含むため合算はできません。";
+  var st=document.getElementById('infoStations');
+  var stations=META.stationExamples||[];
+  if(stations.length){
+    st.innerHTML='<p class="sub" style="margin:0 0 8px">駅からの距離をもとに選んだ候補です。受入れ可否や参加者の状態を確認した推薦ではありません。</p>'+
+      stations.map(function(s){
+        var f=F.filter(function(x){return x.name===s.name;})[0];
+        var nm=f?'<button class="linklike" data-no="'+f.no+'" style="font-weight:700;font-size:14px;padding:0">'+esc(s.name)+'</button>':'<b>'+esc(s.name)+'</b>';
+        return '<div style="padding:7px 0;border-bottom:1px solid var(--line)">'+nm+
+          '<div class="sub" style="font-size:12px;margin-top:2px">🚶 '+esc(s.walk)+'　📞 '+esc(s.tel)+'<br>'+esc(s.people)+'</div></div>';
+      }).join('');
+    (META.stationNotes||[]).forEach(function(n){ st.innerHTML+='<p class="sub" style="font-size:12px;margin:8px 0 0;line-height:1.6">'+esc(n)+'</p>'; });
+    st.querySelectorAll('button[data-no]').forEach(function(b){
+      b.addEventListener('click',function(){ infoM.classList.remove('on'); var no=+b.getAttribute('data-no'); var f=F.filter(function(x){return x.no===no;})[0]; map.setView([f.dlat,f.dlng],16,{animate:true}); setTimeout(function(){openSheet(no);},180); });
+    });
+  }else{ st.parentNode.removeChild(st.previousElementSibling); st.parentNode.removeChild(st); }
+  var cc=document.getElementById('infoCautions');
+  cc.innerHTML=(META.cautions||[]).map(function(x){ return '<details><summary>'+esc(x.label)+'</summary><div class="ct">'+esc(x.text)+'</div></details>'; }).join('');
+}
+fillInfo();
+var infoM=document.getElementById('infoModal'), expM=document.getElementById('exportModal');
+document.getElementById('btnInfo').addEventListener('click',function(){infoM.classList.add('on');});
+document.getElementById('closeInfo').addEventListener('click',function(){infoM.classList.remove('on');});
+document.getElementById('openExport').addEventListener('click',function(){infoM.classList.remove('on');expM.classList.add('on');});
+document.getElementById('closeExport').addEventListener('click',function(){expM.classList.remove('on');});
+[infoM,expM].forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m)m.classList.remove('on'); }); });
+
+// ---------- export / import ----------
+function download(name, text, type){
+  var blob=new Blob([type.indexOf('csv')>=0?"﻿"+text:text],{type:type});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+}
+function stamp(){ var d=new Date(); return d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2); }
+document.getElementById('btnCsv').addEventListener('click',function(){
+  var rows=[["No.","施設名","インタビュー状況","連絡日","実施・訪問日","先方担当","読み合わせ会","メモ","更新日時"]];
+  F.forEach(function(f){ var r=REC[f.no]; if(!r)return;
+    rows.push([f.no,f.name,SMAP[r.status||"none"].label,r.contactDate||"",r.visitDate||"",r.staff||"",r.yomiawase||"",(r.memo||"").replace(/\r?\n/g," "),r.updatedAt||""]);
+  });
+  if(rows.length===1){ toast("記録のある施設がまだありません"); return; }
+  var csv=rows.map(function(r){return r.map(function(c){var s=String(c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",");}).join("\r\n");
+  download("多摩市高齢者施設_インタビュー記録_"+stamp()+".csv", csv, "text/csv");
+  toast("CSVを書き出しました（"+(rows.length-1)+"件）");
+});
+document.getElementById('btnJson').addEventListener('click',function(){
+  download("多摩市高齢者施設_記録バックアップ_"+stamp()+".json", JSON.stringify({version:1,exportedAt:new Date().toISOString(),records:REC},null,1), "application/json");
+  toast("JSONバックアップを書き出しました");
+});
+document.getElementById('btnImport').addEventListener('click',function(){ document.getElementById('fileImport').click(); });
+document.getElementById('fileImport').addEventListener('change',function(e){
+  var file=e.target.files[0]; if(!file)return; var fr=new FileReader();
+  fr.onload=function(){ try{
+    var obj=JSON.parse(fr.result); var inc=obj.records||obj;
+    if(typeof inc!=="object") throw 0;
+    var add=0; Object.keys(inc).forEach(function(k){ REC[k]=inc[k]; add++; });
+    saveREC(); render(); if(activeNo)openSheet(activeNo);
+    toast("取り込みました（"+add+"件）"); expM.classList.remove('on');
+  }catch(err){ toast("取り込めませんでした（JSON形式をご確認ください）"); } };
+  fr.readAsText(file); e.target.value="";
+});
+document.getElementById('btnWipe').addEventListener('click',function(){
+  if(confirm("この端末に保存したインタビュー記録をすべて消去します。よろしいですか？\n（事前にエクスポートで控えを取ることをおすすめします）")){
+    REC={}; saveREC(); render(); closeSheet(); expM.classList.remove('on'); toast("記録を全消去しました");
+  }
+});
+
+// close panel on map interaction
+map.on('click',function(){ panel.classList.remove('on'); });
+
+render();
+// first-visit hint
+if(!localStorage.getItem("tama_seen")){ try{localStorage.setItem("tama_seen","1");}catch(e){} setTimeout(function(){toast("ピンをタップ→詳細とインタビュー記録。⚙で絞り込み");},700); }
+})();
+</script>
+</body>
+</html>

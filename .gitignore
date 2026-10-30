@@ -1,0 +1,9 @@
+# Excel一時ファイル
+~$*.xlsx
+*.backup.xlsx
+# OS
+.DS_Store
+Thumbs.db
+# Python
+__pycache__/
+*.pyc
