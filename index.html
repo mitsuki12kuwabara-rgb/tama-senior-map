@@ -383,13 +383,16 @@ function gsiCleanStyle(){ return { version:8,
     { id:"bld", type:"fill", source:"gsi", "source-layer":"BldA", paint:{ "fill-color":"#e4ddcd","fill-outline-color":"#b3ac98" } }
   ] }; }
 
+// 駅座標は地理院淡色地図の駅記号・駅名に合わせて目視検証済み（2026-10-30）
 var STATIONS=[
+  {name:"中河原駅",lat:35.66060,lng:139.45700},
   {name:"聖蹟桜ヶ丘駅",lat:35.65058,lng:139.44736},
-  {name:"永山駅",lat:35.63250,lng:139.43873},
-  {name:"多摩センター駅",lat:35.62560,lng:139.42060},
-  {name:"唐木田駅",lat:35.61358,lng:139.41966},
-  {name:"高幡不動駅",lat:35.66246,lng:139.41058},
-  {name:"多摩動物公園駅",lat:35.64899,lng:139.40280}
+  {name:"百草園駅",lat:35.65860,lng:139.43210},
+  {name:"高幡不動駅",lat:35.66140,lng:139.41530},
+  {name:"多摩動物公園駅",lat:35.64900,lng:139.40290},
+  {name:"永山駅",lat:35.63300,lng:139.44760},
+  {name:"多摩センター駅",lat:35.62560,lng:139.42470},
+  {name:"唐木田駅",lat:35.61674,lng:139.40918}
 ];
 var paleLayer=L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{maxZoom:18,maxNativeZoom:18,attribution:ATTR_PALE});
 var vecLayer=null, vecOk=(typeof L.maplibreGL==="function");
