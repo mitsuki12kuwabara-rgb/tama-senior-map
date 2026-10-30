@@ -141,6 +141,26 @@
   .cautions summary{font-size:13px;font-weight:700;cursor:pointer}
   .cautions .ct{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6}
 
+  /* fab locate + user marker */
+  #fabLoc{bottom:calc(82px + var(--safe-b))}
+  .fab.active{background:var(--brand);color:#fff}
+  .umk{width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 4px rgba(26,115,232,.25),0 1px 4px rgba(0,0,0,.4)}
+  /* call checklist */
+  .checks{display:flex;flex-direction:column;gap:6px}
+  .chk{display:flex;align-items:center;gap:9px;min-height:40px;padding:6px 10px;border:1.5px solid var(--line);border-radius:9px;background:#fff;font-size:13.5px;text-align:left;cursor:pointer;color:var(--ink);font-family:inherit}
+  .chk .box{flex:none;width:22px;height:22px;border-radius:6px;border:2px solid #c3cbc4;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff}
+  .chk.on{border-color:var(--brand);background:#eaf6ee}
+  .chk.on .box{background:var(--brand);border-color:var(--brand)}
+  /* summary */
+  .statline{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px}
+  .statline .lab{width:92px;flex:none;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .statbar{flex:1;height:15px;border-radius:8px;background:#eef1ee;overflow:hidden;display:flex}
+  .statbar i{display:block;height:100%}
+  .statline .val{width:66px;flex:none;text-align:right;font-weight:700;color:var(--brand-d)}
+  .ldist{flex:none;font-size:11px;color:#fff;background:#1a73e8;font-weight:700;margin-left:6px;padding:2px 7px;border-radius:11px}
+  .seg.lsort{margin-left:auto;max-width:190px}
+  .seg.lsort button{min-height:34px;font-size:12px}
+
   /* desktop: sheet as right sidebar */
   @media(min-width:860px){
     .htitle{font-size:19px}.htitle small{font-size:12px}
@@ -162,10 +182,10 @@
       <button class="hbtn" id="btnPanel" aria-label="絞り込み">⚙</button>
       <button class="hbtn" id="btnInfo" aria-label="このマップについて">ⓘ</button>
     </div>
-    <div class="progress">
+    <div class="progress" id="progressRow" role="button" tabindex="0" style="cursor:pointer">
       <span>インタビュー進捗</span>
       <div class="pbar"><i id="pbarI"></i></div>
-      <span class="pcount"><b id="pDone">0</b>/95 済</span>
+      <span class="pcount"><b id="pDone">0</b>/95 済 ▸</span>
     </div>
     <div class="searchwrap" id="searchwrap">
       <input id="search" type="search" placeholder="施設名・住所で検索" autocomplete="off">
@@ -200,6 +220,7 @@
   </header>
 
   <div id="map"></div>
+  <button class="fab" id="fabLoc"><span class="ic">📍</span>現在地</button>
   <button class="fab" id="fabList"><span class="ic">☰</span>一覧</button>
   <div id="toast"></div>
 
@@ -220,7 +241,9 @@
 
   <!-- list view -->
   <div id="listview">
-    <div class="lhead"><button class="closeS" id="closeList">✕</button><span>施設一覧（<span id="listCount">0</span>件）</span></div>
+    <div class="lhead"><button class="closeS" id="closeList">✕</button><span>一覧 <span id="listCount">0</span>件</span>
+      <div class="seg lsort" id="lsort"><button data-s="progress" class="on">進捗順</button><button data-s="near">近い順</button></div>
+    </div>
     <div class="lbody" id="listBody"></div>
   </div>
 </div>
@@ -242,6 +265,20 @@
     <h3>記録の保存とバックアップ</h3>
     <p class="sub">インタビュー状況・メモは<b>この端末のブラウザ内だけ</b>に保存されます（サーバーには送信しません）。機種変更・共有時は下のエクスポートで控えを取り、元のExcelへ転記してください。</p>
     <button class="bigbtn sec" id="openExport">記録のエクスポート / バックアップ</button>
+  </div>
+</div>
+
+<!-- summary modal -->
+<div class="modal" id="summaryModal">
+  <div class="mcard">
+    <button class="mclose" id="closeSummary">✕</button>
+    <h2>インタビュー進捗</h2>
+    <div id="sumOverall"></div>
+    <h3>エリア別（済／全）</h3>
+    <div id="sumArea"></div>
+    <h3>種別別（済／全）</h3>
+    <div id="sumGroup"></div>
+    <p class="sub" style="font-size:12px;margin-top:12px">「見送り」は残件に含めません。各行をタップで該当エリア・種別に絞り込みます。</p>
   </div>
 </div>
 
@@ -284,6 +321,15 @@ var STATUS = [
 var SMAP={}; STATUS.forEach(function(s){SMAP[s.id]=s;});
 
 var YOMI=["未確認","可","不可","検討中"];
+var CHECKS=[
+  {id:"people",   label:"通常1日に来る人数"},
+  {id:"talkable", label:"会話・聞き取りが可能な希望者"},
+  {id:"yomi",     label:"読み合わせ会の実施可否"},
+  {id:"staff",    label:"担当者"},
+  {id:"meeting",  label:"面談可否"}
+];
+var CKMAP={}; CHECKS.forEach(function(c){CKMAP[c.id]=c.label;});
+var userMarker=null, listSort="progress";
 
 // ---------- storage ----------
 var LSKEY="tama_senior_records_v1";
@@ -294,8 +340,10 @@ function recOf(no){ return REC[no] || {status:"none"}; }
 
 // ---------- state ----------
 var state = {
-  groups: {}, area:"all", status:"all", q:"", colorBy:"group", showConsult:false
+  groups: {}, area:"all", status:"all", q:"", colorBy:"group", showConsult:false, userLoc:null
 };
+function distM(a,b){ var R=6371000,toR=Math.PI/180,dLat=(b.lat-a.lat)*toR,dLng=(b.lng-a.lng)*toR,la1=a.lat*toR,la2=b.lat*toR; var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2); return 2*R*Math.asin(Math.sqrt(h)); }
+function fmtDist(m){ return m<1000?(Math.round(m/10)*10)+"m":(m/1000).toFixed(m<10000?1:0)+"km"; }
 GROUPS.forEach(function(g){ state.groups[g.id]=true; });
 
 // ---------- map ----------
@@ -379,6 +427,57 @@ function updateProgress(){
   document.getElementById('pbarI').style.width=(done/F.length*100)+"%";
 }
 
+function statusCounts(list){ var c={none:0,contact:0,arrange:0,done:0,skip:0}; list.forEach(function(f){ c[recOf(f.no).status||"none"]++; }); return c; }
+function stackBar(c,total){ if(!total) return '<div class="statbar"></div>';
+  return '<div class="statbar">'+STATUS.map(function(s){ var n=c[s.id]||0; return n?'<i style="width:'+(n/total*100)+'%;background:'+s.color+'" title="'+s.label+' '+n+'"></i>':''; }).join('')+'</div>'; }
+function renderSummary(){
+  var all=statusCounts(F);
+  document.getElementById('sumOverall').innerHTML=
+    stackBar(all,F.length)+
+    '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:13px">'+
+    STATUS.map(function(s){ return '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+s.color+';margin-right:4px"></span>'+s.label+' <b>'+(all[s.id]||0)+'</b></span>'; }).join('')+
+    '　<span>残 <b>'+(F.length-(all.done||0)-(all.skip||0))+'</b></span></div>';
+  // area
+  var areas=[]; F.forEach(function(f){ if(f.area&&areas.indexOf(f.area)<0) areas.push(f.area); });
+  document.getElementById('sumArea').innerHTML=areas.map(function(a){
+    var list=F.filter(function(f){return f.area===a;}), c=statusCounts(list);
+    return '<div class="statline" data-area="'+esc(a)+'" style="cursor:pointer"><span class="lab">'+esc(a.replace("方面","").replace("（住所目安）",""))+'</span>'+stackBar(c,list.length)+'<span class="val">'+(c.done||0)+'/'+list.length+'</span></div>';
+  }).join('');
+  // group
+  document.getElementById('sumGroup').innerHTML=GROUPS.filter(function(g){return g.id!=="madoguchi";}).map(function(g){
+    var list=F.filter(function(f){return f.group===g.id;}), c=statusCounts(list);
+    return '<div class="statline" data-group="'+g.id+'" style="cursor:pointer"><span class="lab"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+g.color+';margin-right:5px"></span>'+g.label.replace("（入居系）","")+'</span>'+stackBar(c,list.length)+'<span class="val">'+(c.done||0)+'/'+list.length+'</span></div>';
+  }).join('');
+  // click to filter
+  document.querySelectorAll('#sumArea .statline').forEach(function(el){ el.addEventListener('click',function(){
+    state.area=el.getAttribute('data-area'); ac.querySelectorAll('.chip').forEach(function(x){x.classList.remove('sel'); if(x.textContent===el.getAttribute('data-area').replace("方面","").replace("（住所目安）",""))x.classList.add('sel');});
+    sumM.classList.remove('on'); render(); toast("エリアで絞り込みました");
+  }); });
+  document.querySelectorAll('#sumGroup .statline').forEach(function(el){ el.addEventListener('click',function(){
+    var gid=el.getAttribute('data-group'); GROUPS.forEach(function(g){ state.groups[g.id]=(g.id===gid); });
+    gc.querySelectorAll('.chip').forEach(function(x){ var on=x.getAttribute('data-g')===gid; x.classList.toggle('sel',on); x.classList.toggle('off',!on); });
+    sumM.classList.remove('on'); render(); toast("種別で絞り込みました");
+  }); });
+}
+
+function locate(){
+  if(!navigator.geolocation){ toast("この端末では現在地を取得できません"); return; }
+  toast("現在地を取得中…");
+  navigator.geolocation.getCurrentPosition(function(pos){
+    state.userLoc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(userMarker) map.removeLayer(userMarker);
+    userMarker=L.marker([state.userLoc.lat,state.userLoc.lng],{icon:L.divIcon({className:"",html:'<div class="umk"></div>',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:3000,keyboard:false}).addTo(map);
+    map.setView([state.userLoc.lat,state.userLoc.lng],15,{animate:true});
+    document.getElementById('fabLoc').classList.add('active');
+    listSort="near";
+    if(document.getElementById('listview').classList.contains('on')) renderList();
+    if(activeNo) openSheet(activeNo);
+    toast("現在地を表示（一覧は近い順になります）");
+  },function(err){
+    toast(err.code===1?"現在地の利用を許可してください":"現在地を取得できませんでした");
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+}
+
 // ---------- detail sheet ----------
 var sheet=document.getElementById('sheet');
 function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
@@ -404,6 +503,7 @@ function openSheet(no){
   // key values
   body+='<dl class="kv">';
   body+=row("住所", esc(f.address));
+  if(state.userLoc && f.lat!=null) body+=row("現在地から", '<b style="color:var(--brand-d)">約'+fmtDist(distM(state.userLoc,{lat:f.lat,lng:f.lng}))+'</b> <span style="font-size:11.5px;color:var(--sub)">（直線距離）</span>');
   if(f.tel) body+=row("電話番号", esc(f.tel));
   body+=row("実人数", numCell(f.actual, f.actualType, f.actualAsof));
   body+=row("定員・戸数", capCell(f));
@@ -456,7 +556,13 @@ function recordForm(no, rec){
      '<div class="field"><label>実施・訪問日</label><input type="date" id="r_visit" value="'+esc(rec.visitDate||"")+'"></div></div>';
   h+='<div class="f2"><div class="field"><label>先方の担当・窓口</label><input type="text" id="r_staff" placeholder="例）相談員 ○○様" value="'+esc(rec.staff||"")+'"></div>'+
      '<div class="field"><label>読み合わせ会</label><select id="r_yomi">'+YOMI.map(function(y){return '<option '+((rec.yomiawase||"未確認")===y?'selected':'')+'>'+y+'</option>';}).join('')+'</select></div></div>';
-  h+='<div class="field"><label>メモ（会話可能な希望者数・1日の人数・面談可否など）</label><textarea id="r_memo" placeholder="連絡時の確認：通常1日の人数／会話・聞き取り可能な希望者／読み合わせ会の可否／担当者／面談可否">'+esc(rec.memo||"")+'</textarea></div>';
+  h+='<div class="field"><label>📞 電話で確認（タップでチェック）</label><div class="checks" id="r_checks">';
+  CHECKS.forEach(function(ck){
+    var on=rec.checks&&rec.checks[ck.id];
+    h+='<button type="button" class="chk'+(on?' on':'')+'" data-ck="'+ck.id+'"><span class="box">'+(on?'✓':'')+'</span>'+ck.label+'</button>';
+  });
+  h+='</div></div>';
+  h+='<div class="field"><label>メモ（人数・希望者数・面談可否などの具体値）</label><textarea id="r_memo" placeholder="例）1日15人ほど。会話可能な希望者4〜5名。読み合わせ会は要相談。担当◯◯様。面談可。">'+esc(rec.memo||"")+'</textarea></div>';
   h+='<div class="savednote" id="savedNote">'+(rec.updatedAt?'最終更新 '+esc(rec.updatedAt):'')+'</div>';
   h+='</div>';
   return h;
@@ -472,8 +578,10 @@ function bindRecord(no){
     r.staff=document.getElementById('r_staff').value.trim();
     r.yomiawase=document.getElementById('r_yomi').value;
     r.memo=document.getElementById('r_memo').value.trim();
+    var checks={}; document.querySelectorAll('#r_checks .chk.on').forEach(function(b){checks[b.getAttribute('data-ck')]=true;});
+    if(Object.keys(checks).length) r.checks=checks; else delete r.checks;
     // prune empty
-    if(r.status==="none" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && (r.yomiawase==="未確認"||!r.yomiawase)){
+    if(r.status==="none" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && (r.yomiawase==="未確認"||!r.yomiawase)){
       delete REC[no];
     }else{
       var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
@@ -500,6 +608,12 @@ function bindRecord(no){
   ['r_contact','r_visit','r_staff','r_yomi','r_memo'].forEach(function(id){
     var el=document.getElementById(id);
     el.addEventListener('change',commit); el.addEventListener('blur',commit);
+  });
+  document.querySelectorAll('#r_checks .chk').forEach(function(b){
+    b.addEventListener('click',function(){
+      var on=!b.classList.contains('on'); b.classList.toggle('on',on);
+      b.querySelector('.box').textContent=on?'✓':''; commit();
+    });
   });
 }
 
@@ -528,15 +642,23 @@ function openConsultSheet(c){
 function renderList(){
   var lb=document.getElementById('listBody'); var arr=F.filter(matches);
   document.getElementById('listCount').textContent=arr.length;
-  // sort: status progress then no
-  var ord={done:0,arrange:1,contact:2,none:3,skip:4};
-  arr.sort(function(a,b){ var sa=ord[recOf(a.no).status||"none"], sb=ord[recOf(b.no).status||"none"]; return sa-sb || a.no-b.no; });
+  // sort toggle reflect
+  document.querySelectorAll('#lsort button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-s')===listSort); });
+  if(listSort==="near" && state.userLoc){
+    arr.forEach(function(f){ f._d = (f.lat!=null)?distM(state.userLoc,{lat:f.lat,lng:f.lng}):1e12; });
+    arr.sort(function(a,b){ return a._d-b._d; });
+  }else{
+    var ord={done:0,arrange:1,contact:2,none:3,skip:4};
+    arr.sort(function(a,b){ var sa=ord[recOf(a.no).status||"none"], sb=ord[recOf(b.no).status||"none"]; return sa-sb || a.no-b.no; });
+  }
+  var showDist = listSort==="near" && state.userLoc;
   lb.innerHTML=arr.map(function(f){
     var g=GMAP[f.group], st=SMAP[recOf(f.no).status||"none"];
+    var dist=showDist&&f.lat!=null?'<span class="ldist">'+fmtDist(f._d)+'</span>':'';
     return '<div class="lcard" data-no="'+f.no+'" style="border-left-color:'+g.color+'">'+
       '<div class="ln"><div class="lnm">'+esc(f.name)+'</div>'+
       '<div class="lsub">'+esc(f.category)+'・'+esc(f.area||"")+'</div></div>'+
-      '<span class="lst" style="background:'+st.color+'">'+st.label+'</span></div>';
+      dist+'<span class="lst" style="background:'+st.color+'">'+st.label+'</span></div>';
   }).join('') || '<p style="text-align:center;color:var(--sub);padding:30px 0">該当する施設がありません</p>';
   lb.querySelectorAll('.lcard').forEach(function(card){
     card.addEventListener('click',function(){
@@ -653,12 +775,24 @@ function fillInfo(){
   cc.innerHTML=(META.cautions||[]).map(function(x){ return '<details><summary>'+esc(x.label)+'</summary><div class="ct">'+esc(x.text)+'</div></details>'; }).join('');
 }
 fillInfo();
-var infoM=document.getElementById('infoModal'), expM=document.getElementById('exportModal');
+var infoM=document.getElementById('infoModal'), expM=document.getElementById('exportModal'), sumM=document.getElementById('summaryModal');
 document.getElementById('btnInfo').addEventListener('click',function(){infoM.classList.add('on');});
 document.getElementById('closeInfo').addEventListener('click',function(){infoM.classList.remove('on');});
 document.getElementById('openExport').addEventListener('click',function(){infoM.classList.remove('on');expM.classList.add('on');});
 document.getElementById('closeExport').addEventListener('click',function(){expM.classList.remove('on');});
-[infoM,expM].forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m)m.classList.remove('on'); }); });
+document.getElementById('closeSummary').addEventListener('click',function(){sumM.classList.remove('on');});
+function openSummary(){ renderSummary(); sumM.classList.add('on'); }
+document.getElementById('progressRow').addEventListener('click',openSummary);
+document.getElementById('progressRow').addEventListener('keydown',function(e){ if(e.key==="Enter"||e.key===" "){e.preventDefault();openSummary();} });
+[infoM,expM,sumM].forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m)m.classList.remove('on'); }); });
+
+// locate + list sort
+document.getElementById('fabLoc').addEventListener('click',locate);
+document.getElementById('lsort').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b)return; var s=b.getAttribute('data-s');
+  if(s==="near" && !state.userLoc){ locate(); return; }
+  listSort=s; renderList();
+});
 
 // ---------- export / import ----------
 function download(name, text, type){
@@ -668,9 +802,10 @@ function download(name, text, type){
 }
 function stamp(){ var d=new Date(); return d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2); }
 document.getElementById('btnCsv').addEventListener('click',function(){
-  var rows=[["No.","施設名","インタビュー状況","連絡日","実施・訪問日","先方担当","読み合わせ会","メモ","更新日時"]];
+  var rows=[["No.","施設名","インタビュー状況","連絡日","実施・訪問日","先方担当","読み合わせ会","電話確認済み","メモ","更新日時"]];
   F.forEach(function(f){ var r=REC[f.no]; if(!r)return;
-    rows.push([f.no,f.name,SMAP[r.status||"none"].label,r.contactDate||"",r.visitDate||"",r.staff||"",r.yomiawase||"",(r.memo||"").replace(/\r?\n/g," "),r.updatedAt||""]);
+    var ck=r.checks?Object.keys(r.checks).map(function(k){return CKMAP[k];}).join("・"):"";
+    rows.push([f.no,f.name,SMAP[r.status||"none"].label,r.contactDate||"",r.visitDate||"",r.staff||"",r.yomiawase||"",ck,(r.memo||"").replace(/\r?\n/g," "),r.updatedAt||""]);
   });
   if(rows.length===1){ toast("記録のある施設がまだありません"); return; }
   var csv=rows.map(function(r){return r.map(function(c){var s=String(c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",");}).join("\r\n");
