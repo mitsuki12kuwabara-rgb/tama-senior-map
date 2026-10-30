@@ -6,6 +6,7 @@
 <title>多摩市 高齢者施設マップ｜絵本活動 訪問・インタビュー相談先</title>
 <meta name="description" content="高齢者の人生を絵本にする活動のための、多摩市内の高齢者施設95件の地図。種別・エリアで絞り込み、インタビューの進捗を端末に記録できます。">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" crossorigin="">
 <style>
   :root{
     --brand:#1f8a4c; --brand-d:#156b3a;
@@ -141,6 +142,9 @@
   .cautions summary{font-size:13px;font-weight:700;cursor:pointer}
   .cautions .ct{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6}
 
+  /* station landmarks (目安) */
+  .stn{display:inline-flex;align-items:center;gap:2px;background:#273445;color:#fff;font-size:11px;font-weight:700;padding:2px 8px 2px 6px;border-radius:13px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,.4);border:1.5px solid #fff;transform:translate(-50%,-50%)}
+  .stn .ico{font-size:11px;line-height:1}
   /* fab locate + user marker */
   #fabLoc{bottom:calc(82px + var(--safe-b))}
   .fab.active{background:var(--brand);color:#fff}
@@ -203,6 +207,15 @@
       <div class="psec">
         <h4>インタビュー状況</h4>
         <div class="chips" id="statusChips"></div>
+      </div>
+      <div class="psec">
+        <h4>地図の見え方</h4>
+        <div class="seg" id="baseSeg">
+          <button data-b="clean">すっきり</button>
+          <button data-b="guide">目安</button>
+          <button data-b="basic" class="on">基本</button>
+        </div>
+        <div class="ptext" id="baseHint">基本＝地理院の淡色地図（現在の表示）</div>
       </div>
       <div class="psec">
         <h4>ピンの色分け</h4>
@@ -302,6 +315,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js" crossorigin=""></script>
 <script src="data.js"></script>
 <script>
 (function(){
@@ -349,9 +364,51 @@ GROUPS.forEach(function(g){ state.groups[g.id]=true; });
 // ---------- map ----------
 var map = L.map('map',{zoomControl:true,attributionControl:true}).setView([35.634,139.438],13);
 map.zoomControl.setPosition('bottomright');
-L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{
-  maxZoom:18, attribution:"地理院タイル（淡色地図）"
-}).addTo(map);
+
+// ---------- basemap: すっきり / 目安 / 基本（3way） ----------
+var ATTR_PALE="地理院タイル（淡色地図）";
+var ATTR_VEC="<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank' rel='noopener'>国土地理院最適化ベクトルタイル</a>（試験公開）を加工して作成";
+function zl(a,za,b,zb,c,zc){ return ["interpolate",["linear"],["zoom"],a,za,b,zb,c,zc]; }
+function gsiCleanStyle(){ return { version:8,
+  sources:{ gsi:{ type:"vector", minzoom:4, maxzoom:16,
+    tiles:["https://cyberjapandata.gsi.go.jp/xyz/optimal_bvmap-v1/{z}/{x}/{y}.pbf"], attribution:ATTR_VEC } },
+  layers:[
+    { id:"bg", type:"background", paint:{ "background-color":"#f4f5f0" } },
+    { id:"water", type:"fill", source:"gsi", "source-layer":"WA", paint:{ "fill-color":"#cfe2ef" } },
+    { id:"park", type:"fill", source:"gsi", "source-layer":"SpcfArea", paint:{ "fill-color":"#e7efe1","fill-opacity":0.75 } },
+    { id:"rd-casing", type:"line", source:"gsi", "source-layer":"RdEdg", layout:{ "line-cap":"round","line-join":"round" }, paint:{ "line-color":"#d7d8d1","line-width":zl(12,0.6,16,1.6,19,2.6) } },
+    { id:"rd-fill", type:"line", source:"gsi", "source-layer":"RdCompt", layout:{ "line-cap":"round","line-join":"round" }, paint:{ "line-color":"#ffffff","line-width":zl(13,0.6,16,2.4,19,5) } },
+    { id:"river", type:"line", source:"gsi", "source-layer":"RvrCL", paint:{ "line-color":"#9cc4dd","line-width":1.2 } },
+    { id:"rail", type:"line", source:"gsi", "source-layer":"RailCL", paint:{ "line-color":"#9aa0a6","line-width":1.3,"line-dasharray":[3,2] } },
+    { id:"bld", type:"fill", source:"gsi", "source-layer":"BldA", paint:{ "fill-color":"#e4ddcd","fill-outline-color":"#b3ac98" } }
+  ] }; }
+
+var STATIONS=[
+  {name:"聖蹟桜ヶ丘駅",lat:35.65058,lng:139.44736},
+  {name:"永山駅",lat:35.63250,lng:139.43873},
+  {name:"多摩センター駅",lat:35.62560,lng:139.42060},
+  {name:"唐木田駅",lat:35.61358,lng:139.41966},
+  {name:"高幡不動駅",lat:35.66246,lng:139.41058},
+  {name:"多摩動物公園駅",lat:35.64899,lng:139.40280}
+];
+var paleLayer=L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{maxZoom:18,maxNativeZoom:18,attribution:ATTR_PALE});
+var vecLayer=null, vecOk=(typeof L.maplibreGL==="function");
+if(vecOk){ try{ vecLayer=L.maplibreGL({style:gsiCleanStyle(),attribution:ATTR_VEC}); }catch(e){ vecOk=false; } }
+var stationLayer=L.layerGroup();
+STATIONS.forEach(function(s){
+  var ic=L.divIcon({className:"",html:'<div class="stn"><span class="ico">🚉</span>'+s.name+'</div>',iconSize:[0,0],iconAnchor:[0,0]});
+  stationLayer.addLayer(L.marker([s.lat,s.lng],{icon:ic,keyboard:false,interactive:false,zIndexOffset:500}));
+});
+var baseMode="basic";
+paleLayer.addTo(map);  // 既定は「基本」（現在の表示）
+function setBase(m){
+  if(m===baseMode) return;
+  [paleLayer,vecLayer].forEach(function(l){ if(l&&map.hasLayer(l)) map.removeLayer(l); });
+  if(m==="basic"||!vecLayer){ paleLayer.addTo(map); } else { vecLayer.addTo(map); }
+  if(m==="guide"){ if(!map.hasLayer(stationLayer)) stationLayer.addTo(map); }
+  else if(map.hasLayer(stationLayer)) map.removeLayer(stationLayer);
+  baseMode=m;
+}
 
 var markers=[]; // {no,marker,rec}
 var consultMarkers=[];
@@ -709,6 +766,21 @@ function mkStatusChip(label,val,color){
 mkStatusChip("すべて","all");
 mkStatusChip("未訪問のみ","todo","#9aa3ab");
 STATUS.forEach(function(s){ mkStatusChip(s.label,s.id,s.color); });
+
+// basemap seg (すっきり / 目安 / 基本)
+var BASE_HINT={clean:"すっきり＝地理院ベクトル地図（注記を省き建物を強調）",guide:"目安＝すっきり地図＋主要駅の目印",basic:"基本＝地理院の淡色地図（現在の表示）"};
+(function(){
+  var seg=document.getElementById('baseSeg');
+  if(!vecOk){ // ベクトル非対応端末はフォールバック案内
+    BASE_HINT.clean="すっきり/目安はこの端末では淡色地図で表示します"; BASE_HINT.guide=BASE_HINT.clean;
+  }
+  seg.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+    var m=b.getAttribute('data-b'); setBase(m);
+    document.getElementById('baseHint').textContent=BASE_HINT[m];
+  });
+})();
 
 // color seg
 document.getElementById('colorSeg').addEventListener('click',function(e){
