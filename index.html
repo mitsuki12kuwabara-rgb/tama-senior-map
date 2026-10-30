@@ -142,6 +142,12 @@
   .cautions summary{font-size:13px;font-weight:700;cursor:pointer}
   .cautions .ct{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6}
 
+  /* basemap switch control (top-right) */
+  .basectl{display:flex;background:#fff;border-radius:11px;box-shadow:0 2px 8px rgba(0,0,0,.28);overflow:hidden;border:1px solid #d1d6d2;font-family:inherit}
+  .basectl button{border:0;background:#fff;color:#434b52;font-size:12.5px;font-weight:700;padding:0 11px;min-height:40px;cursor:pointer;border-right:1px solid #ededeb;white-space:nowrap}
+  .basectl button:last-child{border-right:0}
+  .basectl button.on{background:var(--brand);color:#fff}
+  .leaflet-top.leaflet-right{z-index:450}
   /* station landmarks (目安) */
   .stn{display:inline-flex;align-items:center;gap:2px;background:#273445;color:#fff;font-size:11px;font-weight:700;padding:2px 8px 2px 6px;border-radius:13px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,.4);border:1.5px solid #fff;transform:translate(-50%,-50%)}
   .stn .ico{font-size:11px;line-height:1}
@@ -207,15 +213,6 @@
       <div class="psec">
         <h4>インタビュー状況</h4>
         <div class="chips" id="statusChips"></div>
-      </div>
-      <div class="psec">
-        <h4>地図の見え方</h4>
-        <div class="seg" id="baseSeg">
-          <button data-b="clean">すっきり</button>
-          <button data-b="guide">目安</button>
-          <button data-b="basic" class="on">基本</button>
-        </div>
-        <div class="ptext" id="baseHint">基本＝地理院の淡色地図（現在の表示）</div>
       </div>
       <div class="psec">
         <h4>ピンの色分け</h4>
@@ -402,8 +399,7 @@ STATIONS.forEach(function(s){
   var ic=L.divIcon({className:"",html:'<div class="stn"><span class="ico">🚉</span>'+s.name+'</div>',iconSize:[0,0],iconAnchor:[0,0]});
   stationLayer.addLayer(L.marker([s.lat,s.lng],{icon:ic,keyboard:false,interactive:false,zIndexOffset:500}));
 });
-var baseMode="basic";
-paleLayer.addTo(map);  // 既定は「基本」（現在の表示）
+var baseMode="__init", baseBtns={};
 function setBase(m){
   if(m===baseMode) return;
   [paleLayer,vecLayer].forEach(function(l){ if(l&&map.hasLayer(l)) map.removeLayer(l); });
@@ -411,7 +407,26 @@ function setBase(m){
   if(m==="guide"){ if(!map.hasLayer(stationLayer)) stationLayer.addTo(map); }
   else if(map.hasLayer(stationLayer)) map.removeLayer(stationLayer);
   baseMode=m;
+  Object.keys(baseBtns).forEach(function(k){ baseBtns[k].className=(k===m)?"on":""; });
 }
+setBase("guide");  // 既定は「目安」
+
+// 右上の地図切替コントロール（すっきり / 目安 / 基本）
+var BaseCtl=L.Control.extend({
+  options:{position:"topright"},
+  onAdd:function(){
+    var wrap=L.DomUtil.create("div","basectl");
+    [["clean","すっきり"],["guide","目安"],["basic","基本"]].forEach(function(d){
+      var b=L.DomUtil.create("button","",wrap); b.type="button"; b.textContent=d[1];
+      if(d[0]===baseMode) b.className="on";
+      b.onclick=function(){ setBase(d[0]); };
+      baseBtns[d[0]]=b;
+    });
+    L.DomEvent.disableClickPropagation(wrap); L.DomEvent.disableScrollPropagation(wrap);
+    return wrap;
+  }
+});
+map.addControl(new BaseCtl());
 
 var markers=[]; // {no,marker,rec}
 var consultMarkers=[];
@@ -769,21 +784,6 @@ function mkStatusChip(label,val,color){
 mkStatusChip("すべて","all");
 mkStatusChip("未訪問のみ","todo","#9aa3ab");
 STATUS.forEach(function(s){ mkStatusChip(s.label,s.id,s.color); });
-
-// basemap seg (すっきり / 目安 / 基本)
-var BASE_HINT={clean:"すっきり＝地理院ベクトル地図（注記を省き建物を強調）",guide:"目安＝すっきり地図＋主要駅の目印",basic:"基本＝地理院の淡色地図（現在の表示）"};
-(function(){
-  var seg=document.getElementById('baseSeg');
-  if(!vecOk){ // ベクトル非対応端末はフォールバック案内
-    BASE_HINT.clean="すっきり/目安はこの端末では淡色地図で表示します"; BASE_HINT.guide=BASE_HINT.clean;
-  }
-  seg.addEventListener('click',function(e){
-    var b=e.target.closest('button'); if(!b)return;
-    seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
-    var m=b.getAttribute('data-b'); setBase(m);
-    document.getElementById('baseHint').textContent=BASE_HINT[m];
-  });
-})();
 
 // color seg
 document.getElementById('colorSeg').addEventListener('click',function(e){
