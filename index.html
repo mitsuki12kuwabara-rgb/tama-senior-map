@@ -22,7 +22,7 @@
   #app{position:fixed;inset:0;display:flex;flex-direction:column}
 
   /* ---- header ---- */
-  header{background:linear-gradient(180deg,var(--brand),var(--brand-d));color:#fff;padding:8px 12px calc(8px);box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:600}
+  header{position:relative;background:linear-gradient(180deg,var(--brand),var(--brand-d));color:#fff;padding:8px 12px calc(8px);box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:600}
   .hrow{display:flex;align-items:center;gap:8px}
   .htitle{font-size:16px;font-weight:700;line-height:1.2;flex:1;min-width:0}
   .htitle small{display:block;font-size:10.5px;font-weight:400;opacity:.9;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -44,8 +44,22 @@
   #panel.on{transform:none;opacity:1;pointer-events:auto}
   .psec{margin-bottom:12px}
   .psec h4{margin:0 0 7px;font-size:12px;color:var(--sub);font-weight:700;letter-spacing:.02em}
+  /* 子供マップ風フィルタ */
+  .fbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .ftitle{font-size:14px;font-weight:700;color:var(--ink)}
+  .fbadge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--brand);color:#fff;font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+  .fbadge.zero{background:#dfe3e0;color:var(--sub)}
+  .clearf{margin-left:auto;border:1.5px solid var(--line);background:#fff;color:var(--brand-d);border-radius:9px;min-height:34px;padding:0 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .fgroup{margin-bottom:12px}
+  .flab{font-size:12px;color:var(--sub);font-weight:700;margin-bottom:6px}
+  .flab small{font-weight:400;opacity:.85}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--ink)}
+  .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .legend .lgwide{width:100%}
+  .legend .lg{width:14px;height:14px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.12);flex:none}
   .chips{display:flex;flex-wrap:wrap;gap:7px}
   .chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:5px 11px;border-radius:20px;border:1.5px solid var(--line);background:#fff;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .chip .n{font-size:11px;font-weight:800;opacity:.7}
   .chip .dot{width:11px;height:11px;border-radius:50%}
   .chip.off{opacity:.38}
   .chip.sel{border-color:var(--brand);background:#eaf6ee;color:var(--brand-d);font-weight:700}
@@ -63,9 +77,9 @@
   /* marker */
   .mk{position:relative;width:26px;height:26px}
   .mk .pin{position:absolute;inset:0;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.35)}
-  .mk .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff}
-  .mkbadge{position:absolute;right:-5px;top:-5px;width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.4);z-index:3}
-  .mk.skip{opacity:.5}
+  .mk .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;color:#fff;text-shadow:0 1px 1.5px rgba(0,0,0,.45)}
+  .mk.faded{opacity:.42}
+  .mk.ng .num{text-shadow:none}
   .mk.big{width:30px;height:30px;z-index:1000}
 
   /* ---- detail sheet ---- */
@@ -212,30 +226,26 @@
       <button class="clearS" id="clearS">✕</button>
     </div>
     <div id="panel">
-      <div class="psec">
-        <h4>種別（タップで表示切替）</h4>
-        <div class="chips" id="groupChips"></div>
+      <div class="fbar"><span class="ftitle">絞り込み</span><span class="fbadge" id="fcount">0</span><button class="clearf" id="resetFilters">クリア</button></div>
+      <div class="fgroup"><div class="flab">📂 種別</div><div class="chips" id="groupChips"></div></div>
+      <div class="fgroup"><div class="flab">🎯 インタビュー適性</div>
+        <div class="seg" id="suitSeg"><button data-v="all" class="on">すべて</button><button data-v="in">対象候補</button><button data-v="out">対象外候補</button></div>
       </div>
-      <div class="psec">
-        <h4>エリア（住所目安）</h4>
-        <div class="chips" id="areaChips"></div>
+      <div class="fgroup"><div class="flab">📍 エリア（住所目安）</div><div class="chips" id="areaChips"></div></div>
+      <div class="fgroup"><div class="flab">📊 進行段階</div><div class="chips" id="statusChips"></div></div>
+      <div class="fgroup"><div class="flab">📏 現在地からの距離 <small>（📍で現在地をセット）</small></div>
+        <div class="seg" id="distSeg"><button data-v="0" class="on">すべて</button><button data-v="500">500m</button><button data-v="1000">1km</button><button data-v="2000">2km</button></div>
       </div>
-      <div class="psec">
-        <h4>インタビュー状況</h4>
-        <div class="chips" id="statusChips"></div>
-      </div>
-      <div class="psec">
-        <h4>ピンの色分け</h4>
-        <div class="seg" id="colorSeg">
-          <button data-c="group" class="on">施設の種別</button>
-          <button data-c="status">進捗の段階</button>
+      <div class="fgroup"><div class="flab">🎨 ピンの見方</div>
+        <div class="legend">
+          <span><i class="lg" style="background:#2e9e5b;opacity:.42"></i>薄い＝未着手</span>
+          <span><i class="lg" style="background:#2e9e5b"></i>濃い＝進行中</span>
+          <span><i class="lg" style="background:#8e959c"></i>グレー＝見送り</span>
+          <span><i class="lg" style="background:#39475a"></i>暗い色＝特養など対象外候補</span>
+          <span class="lgwide">ピンの数字＝進行段階（0:未着手〜7:継続、×:見送り）</span>
         </div>
-        <div class="ptext" id="colorHint"></div>
       </div>
-      <div class="prow">
-        <button class="linklike" id="resetFilters">絞り込みをリセット</button>
-        <button class="linklike" id="openConsult">相談窓口を表示 ▶</button>
-      </div>
+      <button class="linklike" id="openConsult" style="margin-top:2px">相談窓口を表示 ▶</button>
     </div>
   </header>
 
@@ -376,7 +386,7 @@ function hasRec(no){ return !!(REC[no] || (FMAP[no]&&FMAP[no].seed)); }
 
 // ---------- state ----------
 var state = {
-  groups: {}, area:"all", status:"all", q:"", colorBy:"group", showConsult:false, userLoc:null
+  groups: {}, area:"all", status:"all", suit:"all", dist:0, q:"", showConsult:false, userLoc:null
 };
 function distM(a,b){ var R=6371000,toR=Math.PI/180,dLat=(b.lat-a.lat)*toR,dLng=(b.lng-a.lng)*toR,la1=a.lat*toR,la2=b.lat*toR; var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2); return 2*R*Math.asin(Math.sqrt(h)); }
 function fmtDist(m){ return m<1000?(Math.round(m/10)*10)+"m":(m/1000).toFixed(m<10000?1:0)+"km"; }
@@ -456,16 +466,19 @@ var markers=[]; // {no,marker,rec}
 var consultMarkers=[];
 var activeNo=null;
 
-function markerHtml(f, rec, colorBy){
-  var stg=SMAP[rec.status]||SMAP.todo;
-  var col = colorBy==="status" ? stg.color : GMAP[f.group].color;
-  var cls="mk"+(rec.status==="ng"?" skip":"");
-  var badge=(colorBy==="group" && rec.status!=="todo") ? '<span class="mkbadge" style="background:'+stg.color+'"></span>' : "";
-  var inner='<div class="pin" style="background:'+col+'"></div><div class="num">'+f.no+'</div>'+badge;
-  return {cls:cls, html:inner};
+// インタビュー対象外になりやすい種別（会話が難しい傾向）→ 暗い色
+var OUTSCOPE={"特別養護老人ホーム":1,"介護老人保健施設":1,"グループホーム":1,"認知症対応型通所介護":1};
+function isOutscope(f){ return !!OUTSCOPE[f.category]; }
+function markerHtml(f, rec){
+  var st=normStage(rec.status), stg=SMAP[st];
+  // 色＝状態/適性: 見送り=グレー / 対象外候補=暗色 / それ以外=緑。 未着手は薄く(faded)。
+  var col = st==="ng" ? "#8e959c" : (isOutscope(f) ? "#39475a" : "#2e9e5b");
+  var num = st==="ng" ? "×" : stg.step;   // ピンの数字＝進行段階(0未着手〜7継続)
+  var cls="mk"+(st==="todo"?" faded":"")+(st==="ng"?" ng":"");
+  return {cls:cls, html:'<div class="pin" style="background:'+col+'"></div><div class="num">'+num+'</div>'};
 }
 function iconFor(f, rec){
-  var m=markerHtml(f,rec,state.colorBy);
+  var m=markerHtml(f,rec);
   return L.divIcon({className:"", html:'<div class="'+m.cls+'">'+m.html+'</div>', iconSize:[26,26], iconAnchor:[13,24], popupAnchor:[0,-22]});
 }
 
@@ -488,6 +501,9 @@ C.forEach(function(c,i){
 function matches(f){
   if(!state.groups[f.group]) return false;
   if(state.area!=="all" && f.area!==state.area) return false;
+  if(state.suit==="in" && isOutscope(f)) return false;
+  if(state.suit==="out" && !isOutscope(f)) return false;
+  if(state.dist>0 && state.userLoc){ if(f.lat==null || distM(state.userLoc,{lat:f.lat,lng:f.lng})>state.dist) return false; }
   if(state.status!=="all"){
     var st=recOf(f.no).status||"todo", g=state.status;
     if(g==="todo"){ if(st!=="todo") return false; }
@@ -520,10 +536,21 @@ function render(){
     if(state.showConsult){ if(!map.hasLayer(mk)) mk.addTo(map); }
     else if(map.hasLayer(mk)) map.removeLayer(mk);
   });
-  updateProgress();
+  updateProgress(); updateFCount();
   if(document.getElementById('listview').classList.contains('on')) renderList();
   return n;
 }
+function activeFilterCount(){
+  var n=0;
+  if(GROUPS.filter(function(g){return g.id!=="madoguchi";}).some(function(g){return !state.groups[g.id];})) n++;
+  if(state.area!=="all") n++;
+  if(state.suit!=="all") n++;
+  if(state.status!=="all") n++;
+  if(state.dist>0) n++;
+  if(state.q) n++;
+  return n;
+}
+function updateFCount(){ var el=document.getElementById('fcount'); if(!el)return; var n=activeFilterCount(); el.textContent=n; el.classList.toggle('zero',n===0); }
 
 function updateProgress(){
   var started=0; F.forEach(function(f){ if((recOf(f.no).status||"todo")!=="todo") started++; });
@@ -808,38 +835,49 @@ GROUPS.filter(function(g){return g.id!=="madoguchi";}).forEach(function(g){
 var areas=[]; F.forEach(function(f){ if(areas.indexOf(f.area)<0 && f.area) areas.push(f.area); });
 var ac=document.getElementById('areaChips');
 function mkAreaChip(label,val){
+  var cnt = val==="all" ? F.length : F.filter(function(f){return f.area===val;}).length;
   var el=document.createElement('button'); el.className='chip'+(state.area===val?' sel':'');
-  el.textContent=label; el.addEventListener('click',function(){
+  el.innerHTML=label+' <span class="n">'+cnt+'</span>'; el.addEventListener('click',function(){
     state.area=val; ac.querySelectorAll('.chip').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); render();
   }); ac.appendChild(el);
 }
 mkAreaChip("すべて","all"); areas.forEach(function(a){ mkAreaChip(a.replace("方面","").replace("（住所目安）",""),a); });
 // status chips
 var sc=document.getElementById('statusChips');
+function statusGroupCount(val){
+  if(val==="all") return F.length;
+  return F.filter(function(f){ var st=normStage(recOf(f.no).status);
+    if(val==="todo")return st==="todo";
+    if(val==="active")return ["teleapo","sent","confirm","schedule"].indexOf(st)>=0;
+    if(val==="done")return ["interview","deliver","ongoing"].indexOf(st)>=0;
+    if(val==="ng")return st==="ng"; return false; }).length;
+}
 function mkStatusChip(label,val,color){
-  var el=document.createElement('button'); el.className='chip'+(state.status===val?' sel':'');
-  el.innerHTML=(color?'<span class="dot" style="background:'+color+'"></span>':'')+label;
+  var el=document.createElement('button'); el.className='chip'+(state.status===val?' sel':''); el.setAttribute('data-v',val);
+  el.innerHTML=(color?'<span class="dot" style="background:'+color+'"></span>':'')+label+' <span class="n">'+statusGroupCount(val)+'</span>';
   el.addEventListener('click',function(){ state.status=val; sc.querySelectorAll('.chip').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); render(); });
   sc.appendChild(el);
 }
 mkStatusChip("すべて","all");
 mkStatusChip("未着手","todo","#9aa3ab");
-mkStatusChip("要対応（テレアポ〜日程）","active","#eda400");
+mkStatusChip("要対応","active","#eda400");
 mkStatusChip("面談以降","done","#2e9e5b");
 mkStatusChip("見送り","ng","#b0b6bc");
 
-// color seg
-document.getElementById('colorSeg').addEventListener('click',function(e){
+// 適性セグ（対象候補/対象外候補）
+document.getElementById('suitSeg').addEventListener('click',function(e){
   var b=e.target.closest('button'); if(!b)return;
   this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
-  state.colorBy=b.getAttribute('data-c'); updateColorHint(); render();
+  state.suit=b.getAttribute('data-v'); render();
 });
-function updateColorHint(){
-  document.getElementById('colorHint').innerHTML = state.colorBy==="group"
-    ? "住まい=橙 / 通所・多機能=青 / 交流・介護予防=緑"
-    : "未着手=灰→テレアポ=黄→送付→確認→日程=青→面談=緑→絵本→継続=紫 ／ 見送り=薄灰";
-}
-updateColorHint();
+// 距離セグ（現在地から）
+document.getElementById('distSeg').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b)return;
+  var v=+b.getAttribute('data-v');
+  if(v>0 && !state.userLoc){ locate(); }  // 現在地未取得なら取得を促す
+  this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+  state.dist=v; render();
+});
 
 // header buttons
 var panel=document.getElementById('panel');
@@ -851,11 +889,13 @@ document.getElementById('btnSearch').addEventListener('click',function(){
 document.getElementById('search').addEventListener('input',function(){ state.q=this.value.trim(); render(); });
 document.getElementById('clearS').addEventListener('click',function(){ document.getElementById('search').value=""; state.q=""; render(); });
 document.getElementById('resetFilters').addEventListener('click',function(){
-  GROUPS.forEach(function(g){state.groups[g.id]=true;}); state.area="all"; state.status="all"; state.q="";
+  GROUPS.forEach(function(g){state.groups[g.id]=true;}); state.area="all"; state.status="all"; state.suit="all"; state.dist=0; state.q="";
   document.getElementById('search').value="";
   gc.querySelectorAll('.chip').forEach(function(x){x.classList.add('sel');x.classList.remove('off');});
   ac.querySelectorAll('.chip').forEach(function(x,i){x.classList.toggle('sel',i===0);});
   sc.querySelectorAll('.chip').forEach(function(x,i){x.classList.toggle('sel',i===0);});
+  document.querySelectorAll('#suitSeg button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-v')==="all");});
+  document.querySelectorAll('#distSeg button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-v')==="0");});
   render(); toast("絞り込みをリセットしました");
 });
 document.getElementById('openConsult').addEventListener('click',function(){
