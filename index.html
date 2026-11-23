@@ -721,6 +721,11 @@ function stepperHTML(status){
 function recordForm(no, rec){
   var h='<div class="rec"><h3>📝 インタビュー記録（この端末に保存）</h3>';
   h+='<div class="field"><label>進行段階（タップで現在地を設定）</label><div class="stepper" id="stepper">'+stepperHTML(rec.status)+'</div></div>';
+  h+='<div class="field"><label>インタビュー適性（この施設）</label><div class="seg" id="r_suit">'+
+     '<button type="button" data-v="auto"'+((rec.suit||"auto")==="auto"?' class="on"':'')+'>自動</button>'+
+     '<button type="button" data-v="in"'+(rec.suit==="in"?' class="on"':'')+'>対象</button>'+
+     '<button type="button" data-v="out"'+(rec.suit==="out"?' class="on"':'')+'>対象外</button></div>'+
+     '<div class="savednote" style="color:var(--sub)">自動＝種別の設定に従う。ここで施設ごとに上書きできます。</div></div>';
   h+='<div class="f2"><div class="field"><label>連絡した日</label><input type="date" id="r_contact" value="'+esc(rec.contactDate||"")+'"></div>'+
      '<div class="field"><label>実施・訪問日</label><input type="date" id="r_visit" value="'+esc(rec.visitDate||"")+'"></div></div>';
   h+='<div class="f2"><div class="field"><label>先方の担当・窓口</label><input type="text" id="r_staff" placeholder="例）相談員 ○○様" value="'+esc(rec.staff||"")+'"></div>'+
@@ -752,8 +757,10 @@ function bindRecord(no){
     r.memo=document.getElementById('r_memo').value.trim();
     var checks={}; document.querySelectorAll('#r_checks .chk.on').forEach(function(b){checks[b.getAttribute('data-ck')]=true;});
     if(Object.keys(checks).length) r.checks=checks; else delete r.checks;
+    var suitSel=document.querySelector('#r_suit button.on'); var sv=suitSel?suitSel.getAttribute('data-v'):"auto";
+    if(sv==="in"||sv==="out") r.suit=sv; else delete r.suit;
     // prune empty
-    if(r.status==="todo" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && (r.yomiawase==="未確認"||!r.yomiawase)){
+    if(r.status==="todo" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && !r.suit && (r.yomiawase==="未確認"||!r.yomiawase)){
       delete REC[no];
     }else{
       var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
@@ -784,6 +791,10 @@ function bindRecord(no){
       var on=!b.classList.contains('on'); b.classList.toggle('on',on);
       b.querySelector('.box').textContent=on?'✓':''; commit();
     });
+  });
+  document.getElementById('r_suit').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); commit();
   });
 }
 
