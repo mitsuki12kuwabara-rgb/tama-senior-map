@@ -53,6 +53,12 @@
   .fgroup{margin-bottom:12px}
   .flab{font-size:12px;color:var(--sub);font-weight:700;margin-bottom:6px}
   .flab small{font-weight:400;opacity:.85}
+  .flink{border:none;background:none;color:var(--brand-d);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;padding:0;margin-left:4px;text-decoration:underline}
+  .suitrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .suitrow .sc{flex:1;font-size:13.5px;color:var(--ink)}
+  .suitrow .sc small{color:var(--sub);font-weight:700;margin-left:4px}
+  .suittgl{flex:none;min-height:38px;padding:0 13px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-size:12.5px;font-weight:700;color:var(--sub);cursor:pointer;font-family:inherit}
+  .suittgl.on{background:#39475a;border-color:#39475a;color:#fff}
   .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--ink)}
   .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
   .legend .lgwide{width:100%}
@@ -228,7 +234,7 @@
     <div id="panel">
       <div class="fbar"><span class="ftitle">絞り込み</span><span class="fbadge" id="fcount">0</span><button class="clearf" id="resetFilters">クリア</button></div>
       <div class="fgroup"><div class="flab">📂 種別</div><div class="chips" id="groupChips"></div></div>
-      <div class="fgroup"><div class="flab">🎯 インタビュー適性</div>
+      <div class="fgroup"><div class="flab">🎯 インタビュー適性 <button class="flink" id="openSuit">種別ごとに設定 ▸</button></div>
         <div class="seg" id="suitSeg"><button data-v="all" class="on">すべて</button><button data-v="in">対象候補</button><button data-v="out">対象外候補</button></div>
       </div>
       <div class="fgroup"><div class="flab">📍 エリア（住所目安）</div><div class="chips" id="areaChips"></div></div>
@@ -309,6 +315,17 @@
     <h3>種別別（着手／全）</h3>
     <div id="sumGroup"></div>
     <p class="sub" style="font-size:12px;margin-top:12px">「着手」＝未着手より先に進んだ件数（見送りを含む）。各行をタップで該当エリア・種別に絞り込みます。</p>
+  </div>
+</div>
+
+<!-- 適性設定 modal -->
+<div class="modal" id="suitModal">
+  <div class="mcard">
+    <button class="mclose" id="closeSuit">✕</button>
+    <h2>インタビュー適性の設定</h2>
+    <p class="sub">種別ごとに「対象外候補（暗い色で表示）」にするかを手動で設定できます。色の状態（薄い＝未着手／濃い＝進行中／グレー＝見送り）は自動のままです。個別の施設は各施設の記録内「インタビュー適性」で上書きできます。</p>
+    <div id="suitList"></div>
+    <button class="bigbtn sec" id="suitReset">自動（初期設定）に戻す</button>
   </div>
 </div>
 
@@ -466,13 +483,23 @@ var markers=[]; // {no,marker,rec}
 var consultMarkers=[];
 var activeNo=null;
 
-// インタビュー対象外になりやすい種別（会話が難しい傾向）→ 暗い色
-var OUTSCOPE={"特別養護老人ホーム":1,"介護老人保健施設":1,"グループホーム":1,"認知症対応型通所介護":1};
-function isOutscope(f){ return !!OUTSCOPE[f.category]; }
+// インタビュー対象外になりやすい種別（会話が難しい傾向）→ 暗い色。初期値は自動、ユーザーが手動で調整可。
+var OUTSCOPE_DEFAULT={"特別養護老人ホーム":1,"介護老人保健施設":1,"グループホーム":1,"認知症対応型通所介護":1};
+var OUTKEY="tama_outscope_v1", OUTSET;
+try{ var _os=localStorage.getItem(OUTKEY); OUTSET=_os?JSON.parse(_os):null; }catch(e){ OUTSET=null; }
+if(!OUTSET){ OUTSET={}; Object.keys(OUTSCOPE_DEFAULT).forEach(function(k){OUTSET[k]=1;}); }
+function saveOutset(){ try{ localStorage.setItem(OUTKEY, JSON.stringify(OUTSET)); }catch(e){} }
+function isOutscope(f, rec){
+  rec = rec || recOf(f.no);
+  if(rec.suit==="out") return true;   // 施設ごとの手動上書き
+  if(rec.suit==="in")  return false;
+  return !!OUTSET[f.category];         // 種別ごとの設定
+}
+var CATS=[]; F.forEach(function(f){ if(CATS.indexOf(f.category)<0) CATS.push(f.category); });
 function markerHtml(f, rec){
   var st=normStage(rec.status), stg=SMAP[st];
   // 色＝状態/適性: 見送り=グレー / 対象外候補=暗色 / それ以外=緑。 未着手は薄く(faded)。
-  var col = st==="ng" ? "#8e959c" : (isOutscope(f) ? "#39475a" : "#2e9e5b");
+  var col = st==="ng" ? "#8e959c" : (isOutscope(f, rec) ? "#39475a" : "#2e9e5b");
   var num = st==="ng" ? "×" : stg.step;   // ピンの数字＝進行段階(0未着手〜7継続)
   var cls="mk"+(st==="todo"?" faded":"")+(st==="ng"?" ng":"");
   return {cls:cls, html:'<div class="pin" style="background:'+col+'"></div><div class="num">'+num+'</div>'};
@@ -942,7 +969,27 @@ document.getElementById('closeSummary').addEventListener('click',function(){sumM
 function openSummary(){ renderSummary(); sumM.classList.add('on'); }
 document.getElementById('progressRow').addEventListener('click',openSummary);
 document.getElementById('progressRow').addEventListener('keydown',function(e){ if(e.key==="Enter"||e.key===" "){e.preventDefault();openSummary();} });
-[infoM,expM,sumM].forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m)m.classList.remove('on'); }); });
+// 適性設定モーダル
+var suitM=document.getElementById('suitModal');
+function renderSuitList(){
+  document.getElementById('suitList').innerHTML=CATS.map(function(cat){
+    var cnt=F.filter(function(f){return f.category===cat;}).length, on=!!OUTSET[cat];
+    return '<div class="suitrow"><span class="sc">'+esc(cat)+'<small>'+cnt+'件</small></span>'+
+      '<button class="suittgl'+(on?' on':'')+'" data-cat="'+esc(cat)+'">'+(on?'対象外候補':'対象候補')+'</button></div>';
+  }).join('');
+}
+document.getElementById('openSuit').addEventListener('click',function(){ renderSuitList(); suitM.classList.add('on'); panel.classList.remove('on'); });
+document.getElementById('closeSuit').addEventListener('click',function(){ suitM.classList.remove('on'); });
+document.getElementById('suitList').addEventListener('click',function(e){
+  var b=e.target.closest('.suittgl'); if(!b)return; var cat=b.getAttribute('data-cat');
+  if(OUTSET[cat]) delete OUTSET[cat]; else OUTSET[cat]=1;
+  saveOutset(); renderSuitList(); render(); if(activeNo) openSheet(activeNo);
+});
+document.getElementById('suitReset').addEventListener('click',function(){
+  OUTSET={}; Object.keys(OUTSCOPE_DEFAULT).forEach(function(k){OUTSET[k]=1;}); saveOutset();
+  renderSuitList(); render(); toast("種別の設定を初期値に戻しました");
+});
+[infoM,expM,sumM,suitM].forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m)m.classList.remove('on'); }); });
 
 // locate + list sort
 document.getElementById('fabLoc').addEventListener('click',locate);
