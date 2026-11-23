@@ -44,13 +44,22 @@ ws_overview, ws_list, ws_consult = wb[names[0]], wb[names[1]], wb[names[2]]
 COLS = ["no","category","name","address","tel","actual","actual_type","actual_asof",
         "capacity","unit","capacity_type","area","access","notes","src_name","src_num",
         "carepro_update","survey_date"]
+# S〜Z列: 段階記録（地図画面のインタビュー記録のseed）
+REC_COLS = ["rec_stage","rec_contact","rec_visit","rec_staff","rec_yomi","rec_checks","rec_memo","rec_updated"]  # 列S..Z (index18..25)
+STAGE_ID = {"未着手":"todo","テレアポ":"teleapo","FAX・メール送付":"sent","施設の確認":"confirm",
+            "日程の調整":"schedule","インタビュー":"interview","絵本を持参":"deliver","絵本を持っていく":"deliver",
+            "継続的関係":"ongoing","見送り":"ng"}
 
 facilities = []
 seen_header = False
 for row in ws_list.iter_rows(values_only=True):
     if row[0] == "No.": seen_header = True; continue
     if not seen_header or row[0] is None: continue
-    facilities.append({k: (row[i] if i < len(row) else None) for i, k in enumerate(COLS)})
+    rec = {k: (row[i] if i < len(row) else None) for i, k in enumerate(COLS)}
+    for j, k in enumerate(REC_COLS):
+        idx = 18 + j
+        rec[k] = row[idx] if idx < len(row) else None
+    facilities.append(rec)
 print("facilities:", len(facilities))
 
 # ---- geocode ----
@@ -144,9 +153,27 @@ meta = {
 
 def norm(v):
     return v.isoformat() if hasattr(v,"isoformat") else v
+def seed_of(f):
+    """Excel S〜Z列からインタビュー記録のseedを作る。未着手・空ならNone。"""
+    stage_raw = (str(f.get("rec_stage")).strip() if f.get("rec_stage") not in (None,"") else "")
+    sid = STAGE_ID.get(stage_raw, "todo" if stage_raw in ("","未着手") else None)
+    if sid is None:
+        print("  WARN 未知の段階:", stage_raw, "No", f["no"]); sid = "todo"
+    memo = f.get("rec_memo")
+    has_any = (sid != "todo") or memo or f.get("rec_contact") or f.get("rec_visit") or f.get("rec_staff")
+    if not has_any:
+        return None
+    s = {"status": sid}
+    if f.get("rec_contact"): s["contactDate"] = norm(f["rec_contact"])
+    if f.get("rec_visit"):   s["visitDate"]   = norm(f["rec_visit"])
+    if f.get("rec_staff"):   s["staff"]       = str(f["rec_staff"]).strip()
+    if f.get("rec_yomi"):    s["yomiawase"]   = str(f["rec_yomi"]).strip()
+    if memo:                 s["memo"]        = str(memo).strip()
+    if f.get("rec_updated"): s["updatedAt"]   = str(norm(f["rec_updated"])).strip()
+    return s
 clean_f = []
 for f in facilities:
-    clean_f.append({
+    rec = {
         "no":f["no"],"group":f["group"],"category":f["category"],"name":f["name"],
         "address":f["address"],"tel":norm(f["tel"]),"actual":norm(f["actual"]),
         "actualType":f["actual_type"],"actualAsof":f["actual_asof"],
@@ -157,7 +184,11 @@ for f in facilities:
         "lat":round(f["lat"],6) if f["lat"] else None,"lng":round(f["lng"],6) if f["lng"] else None,
         "dlat":round(f.get("dlat") or f["lat"],6) if f["lat"] else None,
         "dlng":round(f.get("dlng") or f["lng"],6) if f["lng"] else None,
-    })
+    }
+    sd = seed_of(f)
+    if sd: rec["seed"] = sd
+    clean_f.append(rec)
+print("seeds:", sum(1 for r in clean_f if "seed" in r))
 data = {"meta":meta,"groups":GROUPS,"facilities":clean_f,"consult":consult}
 out = ("// 多摩市 高齢者施設マップ データ (自動生成: regenerate.py)\n"
        "// 施設の追加・修正はExcelを編集し再生成。インタビュー記録は地図画面(端末保存)→CSVでExcelへ書き戻し\n"

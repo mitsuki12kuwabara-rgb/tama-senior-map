@@ -64,8 +64,7 @@
   .mk{position:relative;width:26px;height:26px}
   .mk .pin{position:absolute;inset:0;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.35)}
   .mk .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff}
-  .mk.done .pin::after{content:"";position:absolute;right:-7px;top:-7px;width:13px;height:13px;border-radius:50%;background:var(--st-done);border:2px solid #fff;transform:rotate(45deg)}
-  .mk.contact .pin::after,.mk.arrange .pin::after{content:"";position:absolute;right:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--st-contact);border:2px solid #fff;transform:rotate(45deg)}
+  .mkbadge{position:absolute;right:-5px;top:-5px;width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.4);z-index:3}
   .mk.skip{opacity:.5}
   .mk.big{width:30px;height:30px;z-index:1000}
 
@@ -96,10 +95,21 @@
   /* record form */
   .rec{background:#f3f7f3;border:1px solid #dde7de;border-radius:12px;padding:12px;margin-top:4px}
   .rec h3{margin:0 0 10px;font-size:14px;color:var(--brand-d);display:flex;align-items:center;gap:6px}
-  .statusseg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
-  .statusseg button{min-height:40px;padding:0 12px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
-  .statusseg button .dot{width:10px;height:10px;border-radius:50%}
-  .statusseg button.on{border-color:transparent;color:#fff;font-weight:700}
+  /* 段階ステッパー */
+  .stepper{display:flex;flex-direction:column;gap:0;margin-top:2px}
+  .step{position:relative;display:flex;align-items:center;gap:10px;min-height:42px;padding:4px 8px;border:none;background:none;font-family:inherit;font-size:13.5px;color:var(--ink);text-align:left;cursor:pointer;width:100%}
+  .step .stepnum{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid #c9d2cb;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:#8a938c;z-index:1}
+  .step:not(:last-child)::before{content:"";position:absolute;left:20px;top:28px;width:2px;height:calc(100% - 14px);background:#d7ddd8}
+  .step.done .stepnum{background:var(--brand);border-color:var(--brand);color:#fff}
+  .step.done:not(:last-child)::before{background:var(--brand)}
+  .step.done .steplbl{color:var(--sub)}
+  .step.current{border-radius:10px;font-weight:700}
+  .step.current .stepnum{border-color:#fff}
+  .step.current .steplbl{color:#fff}
+  .step.ngstep{margin-top:6px;border-top:1px dashed var(--line);padding-top:10px}
+  .step.ngstep::before{display:none}
+  .step.ngstep .stepnum{border-color:#d7b0b0;color:#b06b6b}
+  .step.ngstep.current .stepnum{background:#fff;color:var(--sub);border-color:#fff}
   .field{margin-bottom:10px}
   .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:3px;font-weight:700}
   .field input,.field textarea,.field select{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:9px 10px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
@@ -193,9 +203,9 @@
       <button class="hbtn" id="btnInfo" aria-label="このマップについて">ⓘ</button>
     </div>
     <div class="progress" id="progressRow" role="button" tabindex="0" style="cursor:pointer">
-      <span>インタビュー進捗</span>
+      <span>アプローチ進捗</span>
       <div class="pbar"><i id="pbarI"></i></div>
-      <span class="pcount"><b id="pDone">0</b>/95 済 ▸</span>
+      <span class="pcount"><b id="pDone">0</b>/95 着手 ▸</span>
     </div>
     <div class="searchwrap" id="searchwrap">
       <input id="search" type="search" placeholder="施設名・住所で検索" autocomplete="off">
@@ -218,7 +228,7 @@
         <h4>ピンの色分け</h4>
         <div class="seg" id="colorSeg">
           <button data-c="group" class="on">施設の種別</button>
-          <button data-c="status">インタビュー進捗</button>
+          <button data-c="status">進捗の段階</button>
         </div>
         <div class="ptext" id="colorHint"></div>
       </div>
@@ -282,13 +292,13 @@
 <div class="modal" id="summaryModal">
   <div class="mcard">
     <button class="mclose" id="closeSummary">✕</button>
-    <h2>インタビュー進捗</h2>
+    <h2>アプローチ進捗</h2>
     <div id="sumOverall"></div>
-    <h3>エリア別（済／全）</h3>
+    <h3>エリア別（着手／全）</h3>
     <div id="sumArea"></div>
-    <h3>種別別（済／全）</h3>
+    <h3>種別別（着手／全）</h3>
     <div id="sumGroup"></div>
-    <p class="sub" style="font-size:12px;margin-top:12px">「見送り」は残件に含めません。各行をタップで該当エリア・種別に絞り込みます。</p>
+    <p class="sub" style="font-size:12px;margin-top:12px">「着手」＝未着手より先に進んだ件数（見送りを含む）。各行をタップで該当エリア・種別に絞り込みます。</p>
   </div>
 </div>
 
@@ -322,15 +332,23 @@ var D = window.TAMA_DATA, F = D.facilities, C = D.consult, META = D.meta;
 var GROUPS = D.groups;
 var GMAP = {}; GROUPS.forEach(function(g){GMAP[g.id]=g;});
 
-// status defs
-var STATUS = [
-  {id:"none",    label:"未着手",     color:"#9aa3ab"},
-  {id:"contact", label:"連絡済",     color:"#e0a500"},
-  {id:"arrange", label:"日程調整中", color:"#e8731c"},
-  {id:"done",    label:"実施済",     color:"#1f8a4c"},
-  {id:"skip",    label:"見送り",     color:"#b0b6bc"}
+// 段階パイプライン: 未着手→テレアポ→FAX/メール送付→施設の確認→日程の調整→インタビュー→絵本を持参→継続的関係 ＋ 見送り
+var STAGES = [
+  {id:"todo",      label:"未着手",         short:"未着手",   color:"#9aa3ab", step:0},
+  {id:"teleapo",   label:"テレアポ",        short:"テレアポ", color:"#eda400", step:1},
+  {id:"sent",      label:"FAX・メール送付", short:"送付",     color:"#ef7a1a", step:2},
+  {id:"confirm",   label:"施設の確認",      short:"確認",     color:"#d9644a", step:3},
+  {id:"schedule",  label:"日程の調整",      short:"日程",     color:"#3f8fd0", step:4},
+  {id:"interview", label:"インタビュー",    short:"面談",     color:"#2e9e5b", step:5},
+  {id:"deliver",   label:"絵本を持参",      short:"絵本",     color:"#1a7f45", step:6},
+  {id:"ongoing",   label:"継続的関係",      short:"継続",     color:"#6f42c1", step:7},
+  {id:"ng",        label:"見送り",          short:"見送り",   color:"#b0b6bc", step:-1}
 ];
-var SMAP={}; STATUS.forEach(function(s){SMAP[s.id]=s;});
+var STATUS=STAGES;  // 後方互換
+var SMAP={}; STAGES.forEach(function(s){SMAP[s.id]=s;});
+var PIPELINE=STAGES.filter(function(s){return s.step>=0;});
+var STAGE_MIGRATE={none:"todo",contact:"teleapo",arrange:"schedule",done:"interview",skip:"ng"};
+function normStage(id){ return SMAP[id]?id:(STAGE_MIGRATE[id]||"todo"); }
 
 var YOMI=["未確認","可","不可","検討中"];
 var CHECKS=[
@@ -348,7 +366,13 @@ var LSKEY="tama_senior_records_v1";
 var REC={};
 try{ REC = JSON.parse(localStorage.getItem(LSKEY)||"{}")||{}; }catch(e){ REC={}; }
 function saveREC(){ try{ localStorage.setItem(LSKEY, JSON.stringify(REC)); }catch(e){ toast("保存できません（ブラウザ設定をご確認ください）"); } }
-function recOf(no){ return REC[no] || {status:"none"}; }
+var FMAP={}; F.forEach(function(f){ FMAP[f.no]=f; });
+function recOf(no){
+  var r=REC[no]; if(r){ r.status=normStage(r.status); return r; }
+  var f=FMAP[no]; if(f&&f.seed){ f.seed.status=normStage(f.seed.status); return f.seed; }
+  return {status:"todo"};
+}
+function hasRec(no){ return !!(REC[no] || (FMAP[no]&&FMAP[no].seed)); }
 
 // ---------- state ----------
 var state = {
@@ -433,9 +457,11 @@ var consultMarkers=[];
 var activeNo=null;
 
 function markerHtml(f, rec, colorBy){
-  var col = colorBy==="status" ? SMAP[rec.status].color : GMAP[f.group].color;
-  var cls="mk "+(rec.status||"none");
-  var inner='<div class="pin" style="background:'+col+'"></div><div class="num">'+f.no+'</div>';
+  var stg=SMAP[rec.status]||SMAP.todo;
+  var col = colorBy==="status" ? stg.color : GMAP[f.group].color;
+  var cls="mk"+(rec.status==="ng"?" skip":"");
+  var badge=(colorBy==="group" && rec.status!=="todo") ? '<span class="mkbadge" style="background:'+stg.color+'"></span>' : "";
+  var inner='<div class="pin" style="background:'+col+'"></div><div class="num">'+f.no+'</div>'+badge;
   return {cls:cls, html:inner};
 }
 function iconFor(f, rec){
@@ -463,9 +489,12 @@ function matches(f){
   if(!state.groups[f.group]) return false;
   if(state.area!=="all" && f.area!==state.area) return false;
   if(state.status!=="all"){
-    var st=recOf(f.no).status||"none";
-    if(state.status==="todo"){ if(st==="done"||st==="skip") return false; }
-    else if(st!==state.status) return false;
+    var st=recOf(f.no).status||"todo", g=state.status;
+    if(g==="todo"){ if(st!=="todo") return false; }
+    else if(g==="active"){ if(["teleapo","sent","confirm","schedule"].indexOf(st)<0) return false; }
+    else if(g==="done"){ if(["interview","deliver","ongoing"].indexOf(st)<0) return false; }
+    else if(g==="ng"){ if(st!=="ng") return false; }
+    else if(st!==g) return false;
   }
   if(state.q){
     var q=state.q.toLowerCase();
@@ -497,31 +526,37 @@ function render(){
 }
 
 function updateProgress(){
-  var done=0; F.forEach(function(f){ if((recOf(f.no).status)==="done") done++; });
-  document.getElementById('pDone').textContent=done;
-  document.getElementById('pbarI').style.width=(done/F.length*100)+"%";
+  var started=0; F.forEach(function(f){ if((recOf(f.no).status||"todo")!=="todo") started++; });
+  document.getElementById('pDone').textContent=started;
+  document.getElementById('pbarI').style.width=(started/F.length*100)+"%";
 }
 
-function statusCounts(list){ var c={none:0,contact:0,arrange:0,done:0,skip:0}; list.forEach(function(f){ c[recOf(f.no).status||"none"]++; }); return c; }
+function statusCounts(list){ var c={}; STAGES.forEach(function(s){c[s.id]=0;}); list.forEach(function(f){ c[normStage(recOf(f.no).status)]++; }); return c; }
 function stackBar(c,total){ if(!total) return '<div class="statbar"></div>';
   return '<div class="statbar">'+STATUS.map(function(s){ var n=c[s.id]||0; return n?'<i style="width:'+(n/total*100)+'%;background:'+s.color+'" title="'+s.label+' '+n+'"></i>':''; }).join('')+'</div>'; }
+function startedCount(list){ return list.filter(function(f){return (normStage(recOf(f.no).status))!=="todo";}).length; }
+function reachedCount(list,step){ return list.filter(function(f){ var r=SMAP[normStage(recOf(f.no).status)]; return r.step>=step; }).length; }
 function renderSummary(){
   var all=statusCounts(F);
+  var legend=STAGES.map(function(s){ return '<span style="white-space:nowrap"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+s.color+';margin-right:4px"></span>'+s.label+' <b>'+(all[s.id]||0)+'</b></span>'; }).join('');
+  var funnel=PIPELINE.filter(function(s){return s.step>=1;}).map(function(s){
+    var r=reachedCount(F,s.step);
+    return '<div class="statline"><span class="lab">'+s.label+'</span><div class="statbar"><i style="width:'+(r/F.length*100)+'%;background:'+s.color+'"></i></div><span class="val">'+r+'</span></div>';
+  }).join('');
   document.getElementById('sumOverall').innerHTML=
     stackBar(all,F.length)+
-    '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:13px">'+
-    STATUS.map(function(s){ return '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+s.color+';margin-right:4px"></span>'+s.label+' <b>'+(all[s.id]||0)+'</b></span>'; }).join('')+
-    '　<span>残 <b>'+(F.length-(all.done||0)-(all.skip||0))+'</b></span></div>';
+    '<div style="display:flex;flex-wrap:wrap;gap:10px 14px;margin:9px 0 4px;font-size:12.5px">'+legend+'</div>'+
+    '<div style="font-size:12px;color:var(--sub);margin:10px 0 3px">到達段階（その段階まで進んだ件数）</div>'+funnel;
   // area
   var areas=[]; F.forEach(function(f){ if(f.area&&areas.indexOf(f.area)<0) areas.push(f.area); });
   document.getElementById('sumArea').innerHTML=areas.map(function(a){
     var list=F.filter(function(f){return f.area===a;}), c=statusCounts(list);
-    return '<div class="statline" data-area="'+esc(a)+'" style="cursor:pointer"><span class="lab">'+esc(a.replace("方面","").replace("（住所目安）",""))+'</span>'+stackBar(c,list.length)+'<span class="val">'+(c.done||0)+'/'+list.length+'</span></div>';
+    return '<div class="statline" data-area="'+esc(a)+'" style="cursor:pointer"><span class="lab">'+esc(a.replace("方面","").replace("（住所目安）",""))+'</span>'+stackBar(c,list.length)+'<span class="val">着手'+startedCount(list)+'/'+list.length+'</span></div>';
   }).join('');
   // group
   document.getElementById('sumGroup').innerHTML=GROUPS.filter(function(g){return g.id!=="madoguchi";}).map(function(g){
     var list=F.filter(function(f){return f.group===g.id;}), c=statusCounts(list);
-    return '<div class="statline" data-group="'+g.id+'" style="cursor:pointer"><span class="lab"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+g.color+';margin-right:5px"></span>'+g.label.replace("（入居系）","")+'</span>'+stackBar(c,list.length)+'<span class="val">'+(c.done||0)+'/'+list.length+'</span></div>';
+    return '<div class="statline" data-group="'+g.id+'" style="cursor:pointer"><span class="lab"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+g.color+';margin-right:5px"></span>'+g.label.replace("（入居系）","")+'</span>'+stackBar(c,list.length)+'<span class="val">着手'+startedCount(list)+'/'+list.length+'</span></div>';
   }).join('');
   // click to filter
   document.querySelectorAll('#sumArea .statline').forEach(function(el){ el.addEventListener('click',function(){
@@ -557,6 +592,7 @@ function locate(){
 var sheet=document.getElementById('sheet');
 function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function telLink(t){ if(!t) return ""; var d=String(t).replace(/[^0-9]/g,""); return '<a class="abtn" href="tel:'+d+'">📞 電話をかける</a>'; }
+function stageBadge(status){ var s=SMAP[normStage(status)]; var pos=s.step>=1?' '+s.step+'/7':''; return '<span class="badge stt" style="background:'+s.color+'">'+s.label+pos+'</span>'; }
 
 function openSheet(no){
   var f=F.filter(function(x){return x.no===no;})[0]; if(!f) return;
@@ -565,9 +601,7 @@ function openSheet(no){
   document.getElementById('shG').style.background=g.color;
   document.getElementById('shCat').textContent=f.category+"　/　"+(f.area||"");
   document.getElementById('shNm').textContent=f.name;
-  var st=SMAP[rec.status||"none"];
-  document.getElementById('shBadges').innerHTML=
-    '<span class="badge stt" style="background:'+st.color+'">'+st.label+'</span>'+
+  document.getElementById('shBadges').innerHTML=stageBadge(rec.status)+
     '<span class="badge" style="background:'+g.color+'22;color:'+g.color+'">'+g.label+'</span>';
 
   var mapsUrl="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(f.address);
@@ -619,14 +653,20 @@ function capCell(f){
   return '<b>'+esc(f.capacity)+' '+esc(f.unit||"")+'</b>　<span style="font-size:11.5px;color:var(--sub)">'+esc(f.capacityType||"")+'</span>';
 }
 
+function stepperHTML(status){
+  var cur=normStage(status), curStep=SMAP[cur].step, h="";
+  PIPELINE.forEach(function(s){
+    var done=(curStep>=0 && s.step<curStep), isc=(cur===s.id);
+    h+='<button type="button" class="step'+(isc?' current':'')+(done?' done':'')+'" data-s="'+s.id+'"'+(isc?' style="background:'+s.color+';border-color:'+s.color+'"':'')+'>'
+      +'<span class="stepnum"'+(isc?' style="background:#fff;color:'+s.color+'"':'')+'>'+(done?'✓':s.step)+'</span><span class="steplbl">'+s.label+'</span></button>';
+  });
+  var ng=(cur==="ng");
+  h+='<button type="button" class="step ngstep'+(ng?' current':'')+'" data-s="ng"'+(ng?' style="background:'+SMAP.ng.color+';border-color:'+SMAP.ng.color+'"':'')+'><span class="stepnum">×</span><span class="steplbl">見送り（無理だった）</span></button>';
+  return h;
+}
 function recordForm(no, rec){
   var h='<div class="rec"><h3>📝 インタビュー記録（この端末に保存）</h3>';
-  h+='<div class="statusseg" id="stseg">';
-  STATUS.forEach(function(s){
-    var on=(rec.status||"none")===s.id;
-    h+='<button data-s="'+s.id+'" class="'+(on?'on':'')+'" style="'+(on?'background:'+s.color:'')+'"><span class="dot" style="background:'+s.color+'"></span>'+s.label+'</button>';
-  });
-  h+='</div>';
+  h+='<div class="field"><label>進行段階（タップで現在地を設定）</label><div class="stepper" id="stepper">'+stepperHTML(rec.status)+'</div></div>';
   h+='<div class="f2"><div class="field"><label>連絡した日</label><input type="date" id="r_contact" value="'+esc(rec.contactDate||"")+'"></div>'+
      '<div class="field"><label>実施・訪問日</label><input type="date" id="r_visit" value="'+esc(rec.visitDate||"")+'"></div></div>';
   h+='<div class="f2"><div class="field"><label>先方の担当・窓口</label><input type="text" id="r_staff" placeholder="例）相談員 ○○様" value="'+esc(rec.staff||"")+'"></div>'+
@@ -644,10 +684,13 @@ function recordForm(no, rec){
 }
 
 function bindRecord(no){
-  var seg=document.getElementById('stseg');
+  var stepper=document.getElementById('stepper');
+  var curStage = normStage(recOf(no).status);
   function commit(){
     var r=REC[no]||{};
-    r.status=seg.querySelector('button.on').getAttribute('data-s');
+    // seedを編集開始したら取り込む
+    if(!REC[no] && FMAP[no] && FMAP[no].seed){ r=JSON.parse(JSON.stringify(FMAP[no].seed)); }
+    r.status=curStage;
     r.contactDate=document.getElementById('r_contact').value;
     r.visitDate=document.getElementById('r_visit').value;
     r.staff=document.getElementById('r_staff').value.trim();
@@ -656,7 +699,7 @@ function bindRecord(no){
     var checks={}; document.querySelectorAll('#r_checks .chk.on').forEach(function(b){checks[b.getAttribute('data-ck')]=true;});
     if(Object.keys(checks).length) r.checks=checks; else delete r.checks;
     // prune empty
-    if(r.status==="none" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && (r.yomiawase==="未確認"||!r.yomiawase)){
+    if(r.status==="todo" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && (r.yomiawase==="未確認"||!r.yomiawase)){
       delete REC[no];
     }else{
       var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
@@ -665,20 +708,18 @@ function bindRecord(no){
     }
     saveREC();
     // refresh badge + marker
-    var st=SMAP[(REC[no]&&REC[no].status)||"none"];
     var f=F.filter(function(x){return x.no===no;})[0];
     var g=GMAP[f.group];
-    document.getElementById('shBadges').innerHTML='<span class="badge stt" style="background:'+st.color+'">'+st.label+'</span><span class="badge" style="background:'+g.color+'22;color:'+g.color+'">'+g.label+'</span>';
+    document.getElementById('shBadges').innerHTML=stageBadge(curStage)+'<span class="badge" style="background:'+g.color+'22;color:'+g.color+'">'+g.label+'</span>';
     var mm=markers.filter(function(m){return m.no===no;})[0];
     if(mm){ mm.marker.setIcon(iconFor(f, recOf(no))); var d2=mm.marker._icon&&mm.marker._icon.querySelector('.mk'); if(d2)d2.classList.add('big'); }
     updateProgress();
   }
-  seg.querySelectorAll('button').forEach(function(b){
-    b.addEventListener('click',function(){
-      seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');x.style.background='';});
-      b.classList.add('on'); b.style.background=SMAP[b.getAttribute('data-s')].color;
-      commit();
-    });
+  stepper.addEventListener('click',function(e){
+    var b=e.target.closest('.step'); if(!b)return;
+    curStage=b.getAttribute('data-s');
+    stepper.innerHTML=stepperHTML(curStage);
+    commit();
   });
   ['r_contact','r_visit','r_staff','r_yomi','r_memo'].forEach(function(id){
     var el=document.getElementById(id);
@@ -723,17 +764,17 @@ function renderList(){
     arr.forEach(function(f){ f._d = (f.lat!=null)?distM(state.userLoc,{lat:f.lat,lng:f.lng}):1e12; });
     arr.sort(function(a,b){ return a._d-b._d; });
   }else{
-    var ord={done:0,arrange:1,contact:2,none:3,skip:4};
-    arr.sort(function(a,b){ var sa=ord[recOf(a.no).status||"none"], sb=ord[recOf(b.no).status||"none"]; return sa-sb || a.no-b.no; });
+    var rank=function(no){ var s=SMAP[normStage(recOf(no).status)]; return s.step<0?99:(10-s.step); };
+    arr.sort(function(a,b){ return rank(a.no)-rank(b.no) || a.no-b.no; });
   }
   var showDist = listSort==="near" && state.userLoc;
   lb.innerHTML=arr.map(function(f){
-    var g=GMAP[f.group], st=SMAP[recOf(f.no).status||"none"];
+    var g=GMAP[f.group], st=SMAP[normStage(recOf(f.no).status)];
     var dist=showDist&&f.lat!=null?'<span class="ldist">'+fmtDist(f._d)+'</span>':'';
     return '<div class="lcard" data-no="'+f.no+'" style="border-left-color:'+g.color+'">'+
       '<div class="ln"><div class="lnm">'+esc(f.name)+'</div>'+
       '<div class="lsub">'+esc(f.category)+'・'+esc(f.area||"")+'</div></div>'+
-      dist+'<span class="lst" style="background:'+st.color+'">'+st.label+'</span></div>';
+      dist+'<span class="lst" style="background:'+st.color+'">'+st.short+'</span></div>';
   }).join('') || '<p style="text-align:center;color:var(--sub);padding:30px 0">該当する施設がありません</p>';
   lb.querySelectorAll('.lcard').forEach(function(card){
     card.addEventListener('click',function(){
@@ -782,8 +823,10 @@ function mkStatusChip(label,val,color){
   sc.appendChild(el);
 }
 mkStatusChip("すべて","all");
-mkStatusChip("未訪問のみ","todo","#9aa3ab");
-STATUS.forEach(function(s){ mkStatusChip(s.label,s.id,s.color); });
+mkStatusChip("未着手","todo","#9aa3ab");
+mkStatusChip("要対応（テレアポ〜日程）","active","#eda400");
+mkStatusChip("面談以降","done","#2e9e5b");
+mkStatusChip("見送り","ng","#b0b6bc");
 
 // color seg
 document.getElementById('colorSeg').addEventListener('click',function(e){
@@ -794,7 +837,7 @@ document.getElementById('colorSeg').addEventListener('click',function(e){
 function updateColorHint(){
   document.getElementById('colorHint').innerHTML = state.colorBy==="group"
     ? "住まい=橙 / 通所・多機能=青 / 交流・介護予防=緑"
-    : "未着手=灰 / 連絡済=黄 / 調整中=橙 / 実施済=緑 / 見送り=薄灰";
+    : "未着手=灰→テレアポ=黄→送付→確認→日程=青→面談=緑→絵本→継続=紫 ／ 見送り=薄灰";
 }
 updateColorHint();
 
@@ -877,10 +920,10 @@ function download(name, text, type){
 }
 function stamp(){ var d=new Date(); return d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2); }
 document.getElementById('btnCsv').addEventListener('click',function(){
-  var rows=[["No.","施設名","インタビュー状況","連絡日","実施・訪問日","先方担当","読み合わせ会","電話確認済み","メモ","更新日時"]];
-  F.forEach(function(f){ var r=REC[f.no]; if(!r)return;
+  var rows=[["No.","施設名","段階","連絡日","実施・訪問日","先方担当","読み合わせ会","電話確認済み","メモ","更新日時"]];
+  F.forEach(function(f){ if(!hasRec(f.no))return; var r=recOf(f.no);
     var ck=r.checks?Object.keys(r.checks).map(function(k){return CKMAP[k];}).join("・"):"";
-    rows.push([f.no,f.name,SMAP[r.status||"none"].label,r.contactDate||"",r.visitDate||"",r.staff||"",r.yomiawase||"",ck,(r.memo||"").replace(/\r?\n/g," "),r.updatedAt||""]);
+    rows.push([f.no,f.name,SMAP[normStage(r.status)].label,r.contactDate||"",r.visitDate||"",r.staff||"",r.yomiawase||"",ck,(r.memo||"").replace(/\r?\n/g," "),r.updatedAt||""]);
   });
   if(rows.length===1){ toast("記録のある施設がまだありません"); return; }
   var csv=rows.map(function(r){return r.map(function(c){var s=String(c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",");}).join("\r\n");
