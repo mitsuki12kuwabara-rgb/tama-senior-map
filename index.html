@@ -338,13 +338,16 @@
   </div>
 </div>
 
-<!-- 操作者名 modal -->
+<!-- チーム共有（名前＋合言葉） modal -->
 <div class="modal" id="opModal">
   <div class="mcard">
-    <h2>お名前を入力</h2>
-    <p class="sub">チームで記録を共有します。だれが操作したか分かるよう、あなたのお名前（ニックネーム可）を入れてください。変更後の記録にこの名前が残ります。</p>
-    <div class="field"><input type="text" id="opInput" placeholder="例）桑原" maxlength="30" autocomplete="name"></div>
-    <button class="bigbtn" id="opSave">この名前で記録する</button>
+    <h2>チームで共有する</h2>
+    <p class="sub">記録はチームのGoogleスプレッドシートに保存され、全員の地図に反映されます。<br>合言葉を知っている人だけが読み書きできます。入れるのは最初の一度だけです（この端末に記憶します）。</p>
+    <div class="field"><label>お名前（ニックネーム可）</label><input type="text" id="opInput" placeholder="例）桑原" maxlength="30" autocomplete="name"></div>
+    <div class="field"><label>チームの合言葉</label><input type="password" id="opKey" placeholder="チームで決めた合言葉" maxlength="60" autocomplete="current-password"></div>
+    <div id="opMsg" style="display:none;color:#c0392b;font-size:13px;margin:2px 0 8px"></div>
+    <button class="bigbtn" id="opSave">つなぐ</button>
+    <div class="savednote" style="text-align:center;margin-top:10px"><a href="#" id="opLocal" style="color:var(--sub)">合言葉がわからない → この端末だけで使う</a></div>
   </div>
 </div>
 
@@ -419,8 +422,15 @@ var FMAP={}; F.forEach(function(f){ FMAP[f.no]=f; });
 var SHEET_URL=((window.TAMA_SHEET_URL||"")+"").trim();
 var SYNC=!!SHEET_URL;          // URL設定時のみチーム共有が有効
 var SERVER={};                 // サーバー（シート）上の最新記録 no->record
-var OPKEY="tama_operator", operator="";
-try{ operator=(localStorage.getItem(OPKEY)||"").trim(); }catch(e){}
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} }
+var OPKEY="tama_operator", operator=(lsGet(OPKEY)||"").trim();
+var TKEY="tama_teamkey", teamKey=(lsGet(TKEY)||"").trim();          // チームの合言葉（端末記憶）
+var LOCALKEY="tama_sync_local", localOnly=(lsGet(LOCALKEY)==="1");  // 共有をオフにしてこの端末だけで使う
+var PENDKEY="tama_pending_v1", pending={};                          // 未送信（オフライン時に貯める）no->1
+try{ pending=JSON.parse(lsGet(PENDKEY)||"{}")||{}; }catch(e){ pending={}; }
+function savePending(){ lsSet(PENDKEY, JSON.stringify(pending)); }
+function syncOn(){ return SYNC && !!teamKey && !localOnly; }        // 実際に共有通信できる状態か
 function recOf(no){
   var r = (SYNC && SERVER[no]) ? SERVER[no] : REC[no];
   if(r){ r.status=normStage(r.status); return r; }
@@ -796,6 +806,7 @@ function bindRecord(no){
       delete REC[no];
     }else{
       var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+      r.ts=Date.now();
       if(SYNC) r.operator=operator;
       REC[no]=r;
       document.getElementById('savedNote').textContent="最終更新 "+r.updatedAt+(SYNC&&operator?"（"+operator+"）":"");
@@ -1087,63 +1098,141 @@ document.getElementById('btnWipe').addEventListener('click',function(){
 // close panel on map interaction
 map.on('click',function(){ panel.classList.remove('on'); });
 
-// ---------- 共有同期（Googleスプレッドシート）初期化 ----------
+// ---------- 共有同期（Googleスプレッドシート＋合言葉）初期化 ----------
 (function(){
   var sb=document.getElementById('syncbar'), sText=document.getElementById('syncText');
+  var opModal=document.getElementById('opModal');
+  var busy=false, lastOk="", errMsg="";
   function setSync(cls, text){ if(!sb)return; sb.className='syncbar '+cls; sText.textContent=text; }
   function fmtTime(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
-  var opModal=document.getElementById('opModal');
-  function openOp(force){ var inp=document.getElementById('opInput'); inp.value=operator||""; opModal.classList.add('on'); opModal._force=!!force; setTimeout(function(){inp.focus();},60); }
-  document.getElementById('opSave').addEventListener('click',function(){
-    var v=document.getElementById('opInput').value.trim(); if(!v){ document.getElementById('opInput').focus(); return; }
-    operator=v.slice(0,30); try{localStorage.setItem(OPKEY,operator);}catch(e){}
-    opModal.classList.remove('on'); updateSyncText();
-  });
-  opModal.addEventListener('click',function(e){ if(e.target===opModal && !opModal._force) opModal.classList.remove('on'); });
-  var opChange=document.getElementById('opChange'); if(opChange) opChange.addEventListener('click',function(){ openOp(false); });
-  function updateSyncText(){ if(SYNC) setSync('ok','共有ON：'+(operator?operator+' さん':'名前未設定')+'（'+fmtTime()+'更新）'); }
-
-  if(!SYNC) return;                      // URL未設定＝端末保存のみ（従来どおり）
-  sb.style.display='flex'; setSync('busy','共有サーバーに接続中…');
-
-  function jsonp(params, cb){
-    var name='__tcb'+(Date.now()%1e7)+(Math.random()*1e4|0), s=document.createElement('script'), done=false;
-    var to=setTimeout(function(){ if(done)return; done=true; cleanup(); cb(new Error('timeout')); },12000);
-    function cleanup(){ clearTimeout(to); try{delete window[name];}catch(e){window[name]=undefined;} if(s.parentNode)s.parentNode.removeChild(s); }
-    window[name]=function(d){ if(done)return; done=true; cleanup(); cb(null,d); };
-    var q=Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
-    s.src=SHEET_URL+'?'+q+'&callback='+name+'&_='+Date.now();
-    s.onerror=function(){ if(done)return; done=true; cleanup(); cb(new Error('network')); };
-    document.body.appendChild(s);
+  function setState(force){
+    if(!sb || !SYNC) return;
+    var n=Object.keys(pending).length, cls, txt;
+    if(localOnly){ cls='off'; txt='📱 この端末だけで記録中'; }
+    else if(!teamKey){ cls='err'; txt='🔑 合言葉を入れてください'; }
+    else if(busy){ cls='busy'; txt='🔄 同期中…'+(n?'（未送信 '+n+'）':''); }
+    else if(force==='err'||errMsg){ cls='err'; txt='⚠ つながりません'+(n?'・未送信 '+n:'')+'（入力は端末に保存されます）'; }
+    else { cls='ok'; txt='共有中：'+(operator?operator+' さん':'名前未設定')+(n?'・未送信 '+n:'')+'（'+(lastOk||fmtTime())+'）'; }
+    setSync(cls, txt);
   }
+  function okNow(){ errMsg=""; lastOk=fmtTime(); setState(); }
+  function onErr(e){ errMsg=String(e&&e.message||e); busy=false; setState('err'); }
+
+  // 画面を1施設ぶん描き直す（マーカーの色／段階と、開いている詳細）
+  function repaintAll(){ render(); if(activeNo!=null && document.getElementById('sheet').classList.contains('on')) openSheet(activeNo); }
+
   function normSrv(r){
     var o={status:normStage(r.status||'todo')};
-    ['contactDate','visitDate','staff','yomiawase','memo','operator','updatedAt','suit'].forEach(function(k){ if(r[k]!=null && r[k]!=='') o[k]=(''+r[k]); });
+    ['contactDate','visitDate','staff','yomiawase','memo','operator','updatedAt','name'].forEach(function(k){ if(r[k]!=null && r[k]!=='') o[k]=(''+r[k]); });
+    if(r.suit==='in'||r.suit==='out') o.suit=r.suit;
     if(r.checks){ if(typeof r.checks==='string'){ try{o.checks=JSON.parse(r.checks);}catch(e){} } else o.checks=r.checks; }
+    o.ts=Number(r.ts)||0;
     return o;
   }
-  function pull(cb){
-    jsonp({action:'list'}, function(err,data){
-      if(err || !data || !data.ok){ setSync('err','共有サーバーに接続できません（入力は端末に保存されます）'); cb&&cb(err); return; }
-      var m={}; (data.records||[]).forEach(function(r){ if(r.no!=null) m[r.no]=normSrv(r); });
-      SERVER=m; updateSyncText();
-      render(); if(activeNo!=null && document.getElementById('sheet').classList.contains('on')) openSheet(activeNo);
-      cb&&cb(null);
-    });
+  // 送信用の1件（記録＋シート見出し用の情報）を作る
+  function itemOf(no){
+    var r=REC[no]||SERVER[no]; if(!r){ var fs=FMAP[no]; if(fs&&fs.seed) r=fs.seed; }
+    if(!r) return null;
+    r=JSON.parse(JSON.stringify(r)); r.status=normStage(r.status); if(r.ts==null) r.ts=Date.now();
+    if(operator) r.operator=r.operator||operator;
+    var st=SMAP[r.status]||SMAP.todo;
+    var suitText = r.suit==='in'?'対象':(r.suit==='out'?'対象外':'自動');
+    var checksText = r.checks?Object.keys(r.checks).map(function(k){return CKMAP[k]||k;}).join('・'):'';
+    var f=FMAP[no]||{};
+    return {no:no, rec:r, info:{name:f.name||r.name||'', step:st.step, stage:st.label, suitText:suitText, checksText:checksText}};
+  }
+
+  function api(payload){
+    payload.key=teamKey;
+    return fetch(SHEET_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
+      .then(function(res){ return res.json(); })
+      .then(function(j){ if(j && j.ok===false){ var er=new Error(j.message||j.error||'error'); er.code=j.error; throw er; } return j; });
+  }
+  function keyFail(){ teamKey=""; lsSet(TKEY,null); setState(); openOp('合言葉が変わったか、ちがっています。もう一度入れてください。'); }
+
+  function pull(){
+    if(!syncOn() || busy || navigator.onLine===false){ setState(); return Promise.resolve(); }
+    busy=true; setState();
+    return api({action:'pull'}).then(function(j){
+      var recs=j.records||{}, changed=false;
+      Object.keys(recs).forEach(function(no){
+        var s=normSrv(recs[no]); var local=SERVER[no]||REC[no];
+        if(pending[no] && local && (local.ts||0)>(s.ts||0)) return;   // 未送信のこちらが新しい→残す
+        if(!local || (s.ts||0)>(local.ts||0)){ SERVER[no]=s; REC[no]=s; delete pending[no]; changed=true; }
+        else { SERVER[no]=s; }
+      });
+      // seed（架電リスト等の初期値）でサーバーにまだ無いものは、こちらから送る
+      F.forEach(function(f){ if(f.seed && !recs[f.no] && !REC[f.no]) pending[f.no]=1; });
+      savePending(); saveREC(); busy=false; okNow();
+      if(changed) repaintAll();
+      flush();
+    }).catch(function(e){ busy=false; if(e&&e.code==='key'){ keyFail(); } else onErr(e); });
+  }
+  function flush(){
+    if(!syncOn() || busy) return Promise.resolve();
+    var ids=Object.keys(pending); if(!ids.length){ setState(); return Promise.resolve(); }
+    var items=[], sent={};
+    ids.forEach(function(no){ var it=itemOf(no); if(it){ items.push(it); sent[no]=it.rec.ts; } });
+    if(!items.length){ return Promise.resolve(); }
+    busy=true; setState();
+    return api({action:'push', who:operator, items:items}).then(function(j){
+      (j.accepted||[]).forEach(function(no){ if((SERVER[no]&&SERVER[no].ts)===sent[no] || (REC[no]&&REC[no].ts)===sent[no]) delete pending[no]; });
+      var rej=j.rejected||{}, changed=false;
+      Object.keys(rej).forEach(function(no){ var s=normSrv(rej[no]); SERVER[no]=s; REC[no]=s; delete pending[no]; changed=true; });
+      savePending(); saveREC(); busy=false; okNow();
+      if(changed) repaintAll();
+    }).catch(function(e){ busy=false; if(e&&e.code==='key'){ keyFail(); } else onErr(e); });
   }
   window.__pull=pull;
   window.__postRecord=function(no){
     var r=REC[no]; if(!r) return;
-    r.no=no; r.name=(FMAP[no]&&FMAP[no].name)||'';
-    setSync('busy','保存中…');
-    try{ fetch(SHEET_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({record:r,operator:operator})}); }catch(e){}
-    SERVER[no]=JSON.parse(JSON.stringify(r)); SERVER[no].operator=operator;
-    clearTimeout(window.__pullT); window.__pullT=setTimeout(function(){ pull(); }, 1800);
+    SERVER[no]=JSON.parse(JSON.stringify(r));     // 画面は即時に最新を表示
+    pending[no]=1; savePending();
+    if(syncOn()) flush(); else setState();
   };
-  if(!operator){ openOp(true); }
-  pull();
+
+  // ---- 名前＋合言葉の画面 ----
+  function openOp(msg){
+    document.getElementById('opInput').value=operator||"";
+    document.getElementById('opKey').value=teamKey||"";
+    var m=document.getElementById('opMsg'); if(msg){ m.textContent=msg; m.style.display='block'; } else { m.style.display='none'; }
+    opModal.classList.add('on'); opModal._force=(!teamKey && !localOnly);
+    setTimeout(function(){ (operator?document.getElementById('opKey'):document.getElementById('opInput')).focus(); },80);
+  }
+  document.getElementById('opSave').addEventListener('click',function(){
+    var name=document.getElementById('opInput').value.trim();
+    var key=document.getElementById('opKey').value.trim();
+    var m=document.getElementById('opMsg');
+    if(!name){ document.getElementById('opInput').focus(); return; }
+    if(!key){ m.textContent='合言葉を入れてください'; m.style.display='block'; document.getElementById('opKey').focus(); return; }
+    var old=teamKey; teamKey=key; operator=name.slice(0,30);
+    busy=true; setState();
+    api({action:'ping'}).then(function(){
+      localOnly=false; lsSet(OPKEY,operator); lsSet(TKEY,teamKey); lsSet(LOCALKEY,null);
+      opModal.classList.remove('on'); busy=false; okNow(); pull();
+    }).catch(function(e){
+      teamKey=old; busy=false; setState();
+      m.textContent=(e&&e.code==='key')?'合言葉がちがいます':'つながりませんでした（電波・URLをご確認ください）';
+      m.style.display='block';
+    });
+  });
+  opModal.addEventListener('click',function(e){ if(e.target===opModal && !opModal._force) opModal.classList.remove('on'); });
+  document.getElementById('opLocal').addEventListener('click',function(e){ e.preventDefault(); localOnly=true; lsSet(LOCALKEY,'1'); opModal.classList.remove('on'); setState(); toast('この端末だけで記録します'); });
+  var opChange=document.getElementById('opChange'); if(opChange){ opChange.textContent='共有の設定'; opChange.addEventListener('click',function(){ openOp(''); }); }
+
+  if(!SYNC) return;                      // URL未設定＝端末保存のみ（従来どおり）
+  sb.style.display='flex';
+  if(localOnly){ setState(); }
+  else if(!teamKey){ setState(); setTimeout(function(){ openOp(''); },300); }
+  else { setState(); pull(); }
   setInterval(function(){ if(!document.hidden) pull(); }, 30000);
   window.addEventListener('focus', function(){ pull(); });
+  window.addEventListener('online', function(){ pull(); });
+  window.addEventListener('beforeunload', function(){
+    if(!syncOn()) return; var ids=Object.keys(pending); if(!ids.length) return;
+    var items=[]; ids.forEach(function(no){ var it=itemOf(no); if(it) items.push(it); });
+    if(items.length){ try{ navigator.sendBeacon(SHEET_URL, new Blob([JSON.stringify({key:teamKey,action:'push',who:operator,items:items})],{type:'text/plain;charset=utf-8'})); }catch(e){} }
+  });
 })();
 
 render();
