@@ -29,6 +29,10 @@
   .hbtn{flex:none;width:40px;height:40px;border:none;border-radius:10px;background:rgba(255,255,255,.16);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .hbtn:active{background:rgba(255,255,255,.3)}
   .progress{margin-top:7px;display:flex;align-items:center;gap:8px;font-size:11.5px}
+  .syncbar{margin-top:5px;display:flex;align-items:center;gap:6px;font-size:11px;color:#eafff2}
+  .syncbar #syncState{font-size:10px}
+  .syncbar.ok #syncState{color:#9cf5bf}.syncbar.busy #syncState{color:#ffe08a}.syncbar.err #syncState{color:#ffb3b3}
+  .syncbar button{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;font-size:11px;border-radius:7px;padding:4px 9px;cursor:pointer;font-family:inherit}
   .pbar{flex:1;height:7px;border-radius:5px;background:rgba(255,255,255,.28);overflow:hidden}
   .pbar>i{display:block;height:100%;width:0;background:#ffe08a;transition:width .4s}
   .pcount{font-weight:700;white-space:nowrap}
@@ -231,6 +235,7 @@
       <div class="pbar"><i id="pbarI"></i></div>
       <span class="pcount"><b id="pDone">0</b>/95 着手 ▸</span>
     </div>
+    <div class="syncbar" id="syncbar" style="display:none"><span id="syncState">●</span> <span id="syncText"></span> <button id="opChange">名前を変更</button></div>
     <div class="searchwrap" id="searchwrap">
       <input id="search" type="search" placeholder="施設名・住所で検索" autocomplete="off">
       <button class="clearS" id="clearS">✕</button>
@@ -333,6 +338,16 @@
   </div>
 </div>
 
+<!-- 操作者名 modal -->
+<div class="modal" id="opModal">
+  <div class="mcard">
+    <h2>お名前を入力</h2>
+    <p class="sub">チームで記録を共有します。だれが操作したか分かるよう、あなたのお名前（ニックネーム可）を入れてください。変更後の記録にこの名前が残ります。</p>
+    <div class="field"><input type="text" id="opInput" placeholder="例）桑原" maxlength="30" autocomplete="name"></div>
+    <button class="bigbtn" id="opSave">この名前で記録する</button>
+  </div>
+</div>
+
 <!-- export modal -->
 <div class="modal" id="exportModal">
   <div class="mcard">
@@ -355,6 +370,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js" crossorigin=""></script>
+<script src="config.js"></script>
 <script src="data.js"></script>
 <script>
 (function(){
@@ -394,16 +410,24 @@ var userMarker=null, listSort="progress";
 
 // ---------- storage ----------
 var LSKEY="tama_senior_records_v1";
-var REC={};
+var REC={};            // 端末ローカル（オフライン用キャッシュ／未設定時の保存先）
 try{ REC = JSON.parse(localStorage.getItem(LSKEY)||"{}")||{}; }catch(e){ REC={}; }
-function saveREC(){ try{ localStorage.setItem(LSKEY, JSON.stringify(REC)); }catch(e){ toast("保存できません（ブラウザ設定をご確認ください）"); } }
+function saveREC(){ try{ localStorage.setItem(LSKEY, JSON.stringify(REC)); }catch(e){} }
 var FMAP={}; F.forEach(function(f){ FMAP[f.no]=f; });
+
+// ---------- 共有同期（Googleスプレッドシート / Apps Script Webアプリ） ----------
+var SHEET_URL=((window.TAMA_SHEET_URL||"")+"").trim();
+var SYNC=!!SHEET_URL;          // URL設定時のみチーム共有が有効
+var SERVER={};                 // サーバー（シート）上の最新記録 no->record
+var OPKEY="tama_operator", operator="";
+try{ operator=(localStorage.getItem(OPKEY)||"").trim(); }catch(e){}
 function recOf(no){
-  var r=REC[no]; if(r){ r.status=normStage(r.status); return r; }
+  var r = (SYNC && SERVER[no]) ? SERVER[no] : REC[no];
+  if(r){ r.status=normStage(r.status); return r; }
   var f=FMAP[no]; if(f&&f.seed){ f.seed.status=normStage(f.seed.status); return f.seed; }
   return {status:"todo"};
 }
-function hasRec(no){ return !!(REC[no] || (FMAP[no]&&FMAP[no].seed)); }
+function hasRec(no){ return !!((SYNC&&SERVER[no]) || REC[no] || (FMAP[no]&&FMAP[no].seed)); }
 
 // ---------- state ----------
 var state = {
@@ -745,7 +769,7 @@ function recordForm(no, rec){
   });
   h+='</div></div>';
   h+='<div class="field"><label>メモ（人数・希望者数・面談可否などの具体値）</label><textarea id="r_memo" placeholder="例）1日15人ほど。会話可能な希望者4〜5名。読み合わせ会は要相談。担当◯◯様。面談可。">'+esc(rec.memo||"")+'</textarea></div>';
-  h+='<div class="savednote" id="savedNote">'+(rec.updatedAt?'最終更新 '+esc(rec.updatedAt):'')+'</div>';
+  h+='<div class="savednote" id="savedNote">'+(rec.updatedAt?'最終更新 '+esc(rec.updatedAt)+(rec.operator?'（'+esc(rec.operator)+'）':''):'')+'</div>';
   h+='</div>';
   return h;
 }
@@ -755,8 +779,8 @@ function bindRecord(no){
   var curStage = normStage(recOf(no).status);
   function commit(){
     var r=REC[no]||{};
-    // seedを編集開始したら取り込む
-    if(!REC[no] && FMAP[no] && FMAP[no].seed){ r=JSON.parse(JSON.stringify(FMAP[no].seed)); }
+    // 既存の記録（共有サーバー or seed）を編集の土台として取り込む
+    if(!REC[no]){ var base=(SYNC&&SERVER[no])||(FMAP[no]&&FMAP[no].seed); if(base) r=JSON.parse(JSON.stringify(base)); }
     r.status=curStage;
     r.contactDate=document.getElementById('r_contact').value;
     r.visitDate=document.getElementById('r_visit').value;
@@ -767,15 +791,17 @@ function bindRecord(no){
     if(Object.keys(checks).length) r.checks=checks; else delete r.checks;
     var suitSel=document.querySelector('#r_suit button.on'); var sv=suitSel?suitSel.getAttribute('data-v'):"auto";
     if(sv==="in"||sv==="out") r.suit=sv; else delete r.suit;
-    // prune empty
-    if(r.status==="todo" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && !r.suit && (r.yomiawase==="未確認"||!r.yomiawase)){
+    // prune empty（共有ONのときは消さずに常に保存＝未着手へ戻す操作も共有）
+    if(!SYNC && r.status==="todo" && !r.contactDate && !r.visitDate && !r.staff && !r.memo && !r.checks && !r.suit && (r.yomiawase==="未確認"||!r.yomiawase)){
       delete REC[no];
     }else{
       var d=new Date(); r.updatedAt=d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+      if(SYNC) r.operator=operator;
       REC[no]=r;
-      document.getElementById('savedNote').textContent="最終更新 "+r.updatedAt;
+      document.getElementById('savedNote').textContent="最終更新 "+r.updatedAt+(SYNC&&operator?"（"+operator+"）":"");
     }
     saveREC();
+    if(SYNC && REC[no] && window.__postRecord){ window.__postRecord(no); }
     // refresh badge + marker
     var f=F.filter(function(x){return x.no===no;})[0];
     var g=GMAP[f.group];
@@ -1060,6 +1086,65 @@ document.getElementById('btnWipe').addEventListener('click',function(){
 
 // close panel on map interaction
 map.on('click',function(){ panel.classList.remove('on'); });
+
+// ---------- 共有同期（Googleスプレッドシート）初期化 ----------
+(function(){
+  var sb=document.getElementById('syncbar'), sText=document.getElementById('syncText');
+  function setSync(cls, text){ if(!sb)return; sb.className='syncbar '+cls; sText.textContent=text; }
+  function fmtTime(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+  var opModal=document.getElementById('opModal');
+  function openOp(force){ var inp=document.getElementById('opInput'); inp.value=operator||""; opModal.classList.add('on'); opModal._force=!!force; setTimeout(function(){inp.focus();},60); }
+  document.getElementById('opSave').addEventListener('click',function(){
+    var v=document.getElementById('opInput').value.trim(); if(!v){ document.getElementById('opInput').focus(); return; }
+    operator=v.slice(0,30); try{localStorage.setItem(OPKEY,operator);}catch(e){}
+    opModal.classList.remove('on'); updateSyncText();
+  });
+  opModal.addEventListener('click',function(e){ if(e.target===opModal && !opModal._force) opModal.classList.remove('on'); });
+  var opChange=document.getElementById('opChange'); if(opChange) opChange.addEventListener('click',function(){ openOp(false); });
+  function updateSyncText(){ if(SYNC) setSync('ok','共有ON：'+(operator?operator+' さん':'名前未設定')+'（'+fmtTime()+'更新）'); }
+
+  if(!SYNC) return;                      // URL未設定＝端末保存のみ（従来どおり）
+  sb.style.display='flex'; setSync('busy','共有サーバーに接続中…');
+
+  function jsonp(params, cb){
+    var name='__tcb'+(Date.now()%1e7)+(Math.random()*1e4|0), s=document.createElement('script'), done=false;
+    var to=setTimeout(function(){ if(done)return; done=true; cleanup(); cb(new Error('timeout')); },12000);
+    function cleanup(){ clearTimeout(to); try{delete window[name];}catch(e){window[name]=undefined;} if(s.parentNode)s.parentNode.removeChild(s); }
+    window[name]=function(d){ if(done)return; done=true; cleanup(); cb(null,d); };
+    var q=Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+    s.src=SHEET_URL+'?'+q+'&callback='+name+'&_='+Date.now();
+    s.onerror=function(){ if(done)return; done=true; cleanup(); cb(new Error('network')); };
+    document.body.appendChild(s);
+  }
+  function normSrv(r){
+    var o={status:normStage(r.status||'todo')};
+    ['contactDate','visitDate','staff','yomiawase','memo','operator','updatedAt','suit'].forEach(function(k){ if(r[k]!=null && r[k]!=='') o[k]=(''+r[k]); });
+    if(r.checks){ if(typeof r.checks==='string'){ try{o.checks=JSON.parse(r.checks);}catch(e){} } else o.checks=r.checks; }
+    return o;
+  }
+  function pull(cb){
+    jsonp({action:'list'}, function(err,data){
+      if(err || !data || !data.ok){ setSync('err','共有サーバーに接続できません（入力は端末に保存されます）'); cb&&cb(err); return; }
+      var m={}; (data.records||[]).forEach(function(r){ if(r.no!=null) m[r.no]=normSrv(r); });
+      SERVER=m; updateSyncText();
+      render(); if(activeNo!=null && document.getElementById('sheet').classList.contains('on')) openSheet(activeNo);
+      cb&&cb(null);
+    });
+  }
+  window.__pull=pull;
+  window.__postRecord=function(no){
+    var r=REC[no]; if(!r) return;
+    r.no=no; r.name=(FMAP[no]&&FMAP[no].name)||'';
+    setSync('busy','保存中…');
+    try{ fetch(SHEET_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({record:r,operator:operator})}); }catch(e){}
+    SERVER[no]=JSON.parse(JSON.stringify(r)); SERVER[no].operator=operator;
+    clearTimeout(window.__pullT); window.__pullT=setTimeout(function(){ pull(); }, 1800);
+  };
+  if(!operator){ openOp(true); }
+  pull();
+  setInterval(function(){ if(!document.hidden) pull(); }, 30000);
+  window.addEventListener('focus', function(){ pull(); });
+})();
 
 render();
 // first-visit hint
